@@ -1,0 +1,190 @@
+// DriveLux — Prisma Schema
+// Database: MySQL (managed via phpMyAdmin)
+// ORM:      Prisma Client (query builder + type generation only)
+//
+// NOTE: Do NOT run `prisma migrate dev` — apply schema.sql in phpMyAdmin instead.
+// After applying the SQL schema, run `prisma generate` to regenerate the client.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum KycStatus {
+  NOT_STARTED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum VehicleType {
+  SEDAN
+  SUV
+  LUXURY
+  ELECTRIC
+  CONVERTIBLE
+  VAN
+}
+
+enum FuelType {
+  PETROL
+  DIESEL
+  ELECTRIC
+  HYBRID
+}
+
+enum Transmission {
+  AUTOMATIC
+  MANUAL
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum DocumentType {
+  DRIVERS_LICENSE
+  PASSPORT
+  NATIONAL_ID
+}
+
+// ─── Models ────────────────────────────────────────────────────────────────
+
+model User {
+  id            Int           @id @default(autoincrement())
+  email         String        @unique
+  password      String
+  name          String
+  phone         String?
+  avatar        String?
+  role          UserRole      @default(CUSTOMER)
+  kycStatus     KycStatus     @default(NOT_STARTED) @map("kyc_status")
+  isBlocked     Boolean       @default(false)        @map("is_blocked")
+  createdAt     DateTime      @default(now())        @map("created_at")
+  updatedAt     DateTime      @updatedAt             @map("updated_at")
+
+  bookings      Booking[]
+  kycDocuments  KycDocument[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model Vehicle {
+  id           Int          @id @default(autoincrement())
+  name         String
+  brand        String
+  model        String
+  year         Int
+  type         VehicleType
+  fuel         FuelType
+  transmission Transmission
+  seats        Int
+  pricePerDay  Decimal      @db.Decimal(10, 2) @map("price_per_day")
+  rating       Float        @default(0)
+  reviewCount  Int          @default(0)       @map("review_count")
+  location     String
+  image        String
+  images       Json
+  features     Json
+  available    Boolean      @default(true)
+  description  String       @db.Text
+  mileage      String
+  engine       String
+  topSpeed     String       @map("top_speed")
+  acceleration String
+  createdAt    DateTime     @default(now())   @map("created_at")
+  updatedAt    DateTime     @updatedAt        @map("updated_at")
+
+  bookings     Booking[]
+
+  @@map("vehicles")
+}
+
+model Booking {
+  id              String        @id
+  userId          Int           @map("user_id")
+  vehicleId       Int           @map("vehicle_id")
+  startDate       DateTime      @map("start_date")
+  endDate         DateTime      @map("end_date")
+  pickupLocation  String        @map("pickup_location")
+  dropoffLocation String        @map("dropoff_location")
+  totalPrice      Decimal       @db.Decimal(10, 2) @map("total_price")
+  status          BookingStatus @default(PENDING)
+  customerName    String?       @map("customer_name")
+  customerEmail   String?       @map("customer_email")
+  customerPhone   String?       @map("customer_phone")
+  licenseNumber   String?       @map("license_number")
+  licenseExpiry   DateTime?     @map("license_expiry")
+  licenseCountry  String?       @map("license_country")
+  notes           String?       @db.Text
+  rentalDays      Int?          @map("rental_days")
+  subtotal        Decimal?      @db.Decimal(10, 2)
+  serviceFee      Decimal?      @db.Decimal(10, 2) @map("service_fee")
+  taxAmount       Decimal?      @db.Decimal(10, 2) @map("tax_amount")
+  depositAmount         Decimal?      @db.Decimal(10, 2) @map("deposit_amount")
+  stripeSessionId       String?       @unique            @map("stripe_session_id")
+  stripePaymentIntentId String?                          @map("stripe_payment_intent_id")
+  paymentStatus         String        @default("unpaid") @map("payment_status")
+  paidAt                DateTime?                        @map("paid_at")
+  createdAt             DateTime      @default(now())    @map("created_at")
+  updatedAt             DateTime      @updatedAt         @map("updated_at")
+
+  user    User    @relation(fields: [userId],    references: [id])
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+
+  @@index([userId])
+  @@index([vehicleId])
+  @@index([status])
+  @@map("bookings")
+}
+
+model KycDocument {
+  id             Int          @id @default(autoincrement())
+  userId         Int          @map("user_id")
+  documentType   DocumentType @map("document_type")
+  documentNumber String       @map("document_number")
+  expiryDate     DateTime     @map("expiry_date")
+  country        String
+  filePath       String       @map("file_path")
+  status         KycStatus    @default(PENDING)
+  reviewedById   Int?         @map("reviewed_by_id")
+  reviewNote     String?      @map("review_note")
+  submittedAt    DateTime     @default(now()) @map("submitted_at")
+  reviewedAt     DateTime?    @map("reviewed_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("kyc_documents")
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  token     String   @unique @db.VarChar(64)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}

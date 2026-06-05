@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+*.log
+
+# Prisma generated client
+node_modules/.prisma
+
+# Uploads
+uploads/
