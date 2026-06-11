@@ -39,6 +39,7 @@ import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as AdminProfileRouteImport } from './routes/admin.profile'
 import { Route as AdminPaymentsRouteImport } from './routes/admin.payments'
+import { Route as AdminOffersRouteImport } from './routes/admin.offers'
 import { Route as AdminKycRouteImport } from './routes/admin.kyc'
 import { Route as AdminFleetRouteImport } from './routes/admin.fleet'
 import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
@@ -193,6 +194,11 @@ const AdminPaymentsRoute = AdminPaymentsRouteImport.update({
   path: '/payments',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminOffersRoute = AdminOffersRouteImport.update({
+  id: '/offers',
+  path: '/offers',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminKycRoute = AdminKycRouteImport.update({
   id: '/kyc',
   path: '/kyc',
@@ -225,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/fleet': typeof AdminFleetRoute
   '/admin/kyc': typeof AdminKycRoute
+  '/admin/offers': typeof AdminOffersRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/profile': typeof AdminProfileRoute
   '/admin/reports': typeof AdminReportsRoute
@@ -258,6 +265,7 @@ export interface FileRoutesByTo {
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/fleet': typeof AdminFleetRoute
   '/admin/kyc': typeof AdminKycRoute
+  '/admin/offers': typeof AdminOffersRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/profile': typeof AdminProfileRoute
   '/admin/reports': typeof AdminReportsRoute
@@ -294,6 +302,7 @@ export interface FileRoutesById {
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/fleet': typeof AdminFleetRoute
   '/admin/kyc': typeof AdminKycRoute
+  '/admin/offers': typeof AdminOffersRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/profile': typeof AdminProfileRoute
   '/admin/reports': typeof AdminReportsRoute
@@ -331,6 +340,7 @@ export interface FileRouteTypes {
     | '/admin/bookings'
     | '/admin/fleet'
     | '/admin/kyc'
+    | '/admin/offers'
     | '/admin/payments'
     | '/admin/profile'
     | '/admin/reports'
@@ -364,6 +374,7 @@ export interface FileRouteTypes {
     | '/admin/bookings'
     | '/admin/fleet'
     | '/admin/kyc'
+    | '/admin/offers'
     | '/admin/payments'
     | '/admin/profile'
     | '/admin/reports'
@@ -399,6 +410,7 @@ export interface FileRouteTypes {
     | '/admin/bookings'
     | '/admin/fleet'
     | '/admin/kyc'
+    | '/admin/offers'
     | '/admin/payments'
     | '/admin/profile'
     | '/admin/reports'
@@ -650,6 +662,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPaymentsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/offers': {
+      id: '/admin/offers'
+      path: '/offers'
+      fullPath: '/admin/offers'
+      preLoaderRoute: typeof AdminOffersRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/kyc': {
       id: '/admin/kyc'
       path: '/kyc'
@@ -678,6 +697,7 @@ interface AdminRouteChildren {
   AdminBookingsRoute: typeof AdminBookingsRoute
   AdminFleetRoute: typeof AdminFleetRoute
   AdminKycRoute: typeof AdminKycRoute
+  AdminOffersRoute: typeof AdminOffersRoute
   AdminPaymentsRoute: typeof AdminPaymentsRoute
   AdminProfileRoute: typeof AdminProfileRoute
   AdminReportsRoute: typeof AdminReportsRoute
@@ -691,6 +711,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminBookingsRoute: AdminBookingsRoute,
   AdminFleetRoute: AdminFleetRoute,
   AdminKycRoute: AdminKycRoute,
+  AdminOffersRoute: AdminOffersRoute,
   AdminPaymentsRoute: AdminPaymentsRoute,
   AdminProfileRoute: AdminProfileRoute,
   AdminReportsRoute: AdminReportsRoute,

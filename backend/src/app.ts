@@ -15,6 +15,8 @@ import { bookingRouter } from './modules/bookings/booking.routes.js';
 import { userRouter } from './modules/users/user.routes.js';
 import { adminRouter } from './modules/admin/admin.routes.js';
 import { paymentRouter } from './modules/payments/payment.routes.js';
+import { offerRouter } from './modules/offers/offer.routes.js';
+import { reviewRouter } from './modules/reviews/reviews.routes.js';
 
 // ─── App factory ──────────────────────────────────────────────────────────
 // Returns a configured Express application.
@@ -85,6 +87,8 @@ export function createApp() {
   app.use('/api/users', userRouter);
   app.use('/api/admin', adminRouter);
   app.use('/api/payments', paymentRouter);
+  app.use('/api/offers',   offerRouter);
+  app.use('/api/reviews',  reviewRouter);
 
   // ── 404 handler ──────────────────────────────────────────────────────────
   app.use((_req, res) => {

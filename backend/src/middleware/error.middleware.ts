@@ -50,7 +50,7 @@ export function errorMiddleware(
 
   // Prisma known request error (unique constraint, record-not-found, etc.)
   if (err.constructor.name === 'PrismaClientKnownRequestError') {
-    const prismaErr = err as { code: string };
+    const prismaErr = err as any;
     if (prismaErr.code === 'P2002') {
       res.status(409).json({ error: 'A record with this value already exists.', code: 'DUPLICATE' });
       return;

@@ -24,8 +24,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
-import { vehicleService } from "@/lib/api";
-import { reviews, vehicles as allVehicles } from "@/lib/mock-data";
+import { vehicleService, reviewService } from "@/lib/api";
+import { vehicles as allVehicles } from "@/lib/mock-data";
 import { useBookingDraft } from "@/store/booking";
 import { calcBookingTotal } from "@/utils/formatters";
 import { useSavedStore } from "@/store/saved";
@@ -43,6 +43,11 @@ function VehicleDetails() {
   const { data: vehicle, isLoading } = useQuery({
     queryKey: ["vehicle", id],
     queryFn: () => vehicleService.get(id),
+  });
+  const { data: reviews = [] } = useQuery({
+    queryKey: ["vehicle-reviews", id],
+    queryFn: () => reviewService.getVehicleReviews(id),
+    enabled: !!vehicle,
   });
   const [activeImage, setActiveImage] = useState(0);
   const [range, setRange] = useState<{ from?: Date; to?: Date }>({});
@@ -81,15 +86,13 @@ function VehicleDetails() {
 
   const days =
     range.from && range.to
-      ? Math.max(
-          1,
-          Math.ceil(
-            (range.to.getTime() - range.from.getTime()) / (1000 * 60 * 60 * 24),
-          ),
-        )
+      ? Math.max(1, Math.ceil((range.to.getTime() - range.from.getTime()) / 86_400_000))
       : 0;
 
-  const { subtotal, fees, total } = calcBookingTotal(vehicle.pricePerDay, days);
+  // Estimate: 12 hours per selected day-block (actual price set at booking time)
+  const estimateHours = days * 12;
+  const hourlyRate = Math.round(vehicle.pricePerDay / 12);
+  const { subtotal, fees, total } = calcBookingTotal(vehicle.pricePerDay, estimateHours);
 
   const handleBook = () => {
     setDraft({
@@ -296,9 +299,9 @@ function VehicleDetails() {
             <div className="flex items-baseline justify-between">
               <div>
                 <span className="font-display text-3xl font-bold">
-                  ${vehicle.pricePerDay}
+                  ${hourlyRate}
                 </span>
-                <span className="text-muted-foreground"> / day</span>
+                <span className="text-muted-foreground"> / hr</span>
               </div>
               <Badge variant="secondary" className="gap-1">
                 <Check className="h-3 w-3" /> Free cancel
@@ -327,7 +330,7 @@ function VehicleDetails() {
               <div className="mt-5 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">
-                    ${vehicle.pricePerDay} × {days} day{days > 1 ? "s" : ""}
+                    ${hourlyRate}/hr × {estimateHours} hrs (est.)
                   </span>
                   <span>${subtotal}</span>
                 </div>

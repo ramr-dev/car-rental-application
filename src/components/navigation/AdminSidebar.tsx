@@ -9,6 +9,7 @@ import {
   Menu,
   Settings,
   ShieldCheck,
+  Tag,
   UserCircle,
   Users,
   Wrench,
@@ -27,6 +28,7 @@ const links = [
   { to: "/admin/reports", label: "Reports", icon: BarChart3 },
   { to: "/admin/kyc", label: "KYC Approvals", icon: ShieldCheck },
   { to: "/admin/payments", label: "Payments", icon: CreditCard },
+  { to: "/admin/offers", label: "Offers", icon: Tag },
   { to: "/admin/settings", label: "Settings", icon: Settings },
   { to: "/admin/profile", label: "My Profile", icon: UserCircle },
 ] as const;
@@ -43,7 +45,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
       </div>
       <nav className="space-y-1">
         {links.map((l) => {
-          const active = l.exact ? path === l.to : path.startsWith(l.to);
+          const active = "exact" in l ? path === l.to : path.startsWith(l.to);
           const Icon = l.icon;
           return (
             <Link

@@ -3,6 +3,8 @@ import { randomInt } from 'crypto';
 import { prisma } from '../../lib/prisma.js';
 import { env } from '../../config/env.js';
 import { AppError } from '../../middleware/error.middleware.js';
+import { getActiveForPricing, bestDiscount } from '../offers/offer.service.js';
+import { createBookingPaidNotification } from '../notifications/notification.service.js';
 import type { CreateCheckoutInput, CreateIntentInput, VerifyIntentInput } from './payment.schema.js';
 
 // ─── Stripe client ─────────────────────────────────────────────────────────
@@ -14,20 +16,47 @@ const stripe = new Stripe(env.STRIPE_SECRET_KEY);
 const SERVICE_FEE_RATE = 0.12;
 const TAX_RATE         = 0.085;
 
-function calcRentalDays(start: Date, end: Date): number {
-  return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86_400_000));
+function calcRentalHours(start: Date, end: Date): number {
+  return Math.max(6, (end.getTime() - start.getTime()) / 3_600_000);
 }
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-function calcPricing(pricePerDay: number, days: number) {
-  const subtotal   = round2(pricePerDay * days);
-  const serviceFee = round2(subtotal * SERVICE_FEE_RATE);
-  const taxAmount  = round2((subtotal + serviceFee) * TAX_RATE);
-  const totalPrice = round2(subtotal + serviceFee + taxAmount);
+function calcPricing(pricePerDay: number, hours: number, discountPercent = 0) {
+  if (hours < 12) {
+    const subtotal   = round2((pricePerDay / 12) * hours);
+    const serviceFee = round2(subtotal * SERVICE_FEE_RATE);
+    const taxAmount  = round2((subtotal + serviceFee) * TAX_RATE);
+    const totalPrice = round2(subtotal + serviceFee + taxAmount);
+    return { subtotal, serviceFee, taxAmount, totalPrice };
+  }
+
+  const days        = Math.max(1, Math.ceil(hours / 24));
+  const base        = round2(days * pricePerDay);
+  const discountAmt = round2(base * (discountPercent / 100));
+  const subtotal    = round2(base - discountAmt);
+  const serviceFee  = round2(subtotal * SERVICE_FEE_RATE);
+  const taxAmount   = round2((subtotal + serviceFee) * TAX_RATE);
+  const totalPrice  = round2(subtotal + serviceFee + taxAmount);
   return { subtotal, serviceFee, taxAmount, totalPrice };
+}
+
+async function pricingWithOffers(pricePerDay: number, hours: number) {
+  const activeOffers = await getActiveForPricing();
+  const days         = hours < 12 ? 0 : Math.max(1, Math.ceil(hours / 24));
+  const discPct      = bestDiscount(days, activeOffers);
+  return calcPricing(pricePerDay, hours, discPct);
+}
+
+function rentalDurationLabel(hours: number): string {
+  if (hours < 12) {
+    const h = Math.ceil(hours);
+    return `${h} hr${h !== 1 ? 's' : ''}`;
+  }
+  const days = Math.max(1, Math.ceil(hours / 24));
+  return `${days} day${days !== 1 ? 's' : ''}`;
 }
 
 function generateBookingId(): string {
@@ -120,9 +149,9 @@ export async function createCheckoutSession(
     );
   }
 
-  // 3. Calculate price server-side
-  const days    = calcRentalDays(startDate, endDate);
-  const pricing = calcPricing(Number(vehicle.pricePerDay), days);
+  // 3. Calculate price server-side (hourly: pricePerDay = 12-hour base rate)
+  const hours   = calcRentalHours(startDate, endDate);
+  const pricing = await pricingWithOffers(Number(vehicle.pricePerDay), hours);
 
   // 4. Build Stripe metadata (max 500 chars per value)
   const metadata: Record<string, string> = {
@@ -138,7 +167,7 @@ export async function createCheckoutSession(
     licenseNumber:   input.licenseNumber.slice(0, 490),
     licenseExpiry:   input.licenseExpiry,
     licenseCountry:  input.licenseCountry.slice(0, 490),
-    rentalDays:      String(days),
+    rentalDays:      String(Math.ceil(hours)), // stores rental hours
     subtotal:        String(pricing.subtotal),
     serviceFee:      String(pricing.serviceFee),
     taxAmount:       String(pricing.taxAmount),
@@ -157,7 +186,7 @@ export async function createCheckoutSession(
           currency:     'usd',
           unit_amount:  amountCents,
           product_data: {
-            name:        `${vehicle.name} — ${days} day${days !== 1 ? 's' : ''}`,
+            name:        `${vehicle.name} — ${rentalDurationLabel(hours)}`,
             description: `${input.startDate} → ${input.endDate} · Pickup: ${input.pickupLocation}`,
             images:      [vehicle.image].filter((u) => u.startsWith('http')),
           },
@@ -231,8 +260,8 @@ export async function verifyAndCreate(sessionId: string, userId: number) {
   }
 
   // 7. Re-calculate price server-side and verify Stripe charged the right amount
-  const days     = calcRentalDays(startDate, endDate);
-  const pricing  = calcPricing(Number(vehicle.pricePerDay), days);
+  const hours    = calcRentalHours(startDate, endDate);
+  const pricing  = await pricingWithOffers(Number(vehicle.pricePerDay), hours);
   const expected = Math.round(pricing.totalPrice * 100);
   const charged  = session.amount_total ?? 0;
 
@@ -272,7 +301,7 @@ export async function verifyAndCreate(sessionId: string, userId: number) {
       licenseExpiry:         new Date(meta.licenseExpiry),
       licenseCountry:        meta.licenseCountry,
       notes:                 meta.notes || null,
-      rentalDays:            days,
+      rentalDays:            Math.ceil(hours), // stores rental hours
       subtotal:              pricing.subtotal,
       serviceFee:            pricing.serviceFee,
       taxAmount:             pricing.taxAmount,
@@ -286,6 +315,14 @@ export async function verifyAndCreate(sessionId: string, userId: number) {
       vehicle: { select: { name: true, image: true, brand: true, year: true } },
     },
   });
+
+  // Fire-and-forget: notification failure must not affect booking confirmation
+  createBookingPaidNotification(
+    booking.id,
+    booking.customerName,
+    booking.vehicle.name,
+    pricing.totalPrice,
+  ).catch(() => {});
 
   return toBookingResponse(booking);
 }
@@ -315,8 +352,8 @@ export async function createPaymentIntent(
     throw new AppError(409, 'This vehicle is already booked for part or all of the selected dates.', 'DATE_CONFLICT');
   }
 
-  const days    = calcRentalDays(startDate, endDate);
-  const pricing = calcPricing(Number(vehicle.pricePerDay), days);
+  const hours   = calcRentalHours(startDate, endDate);
+  const pricing = await pricingWithOffers(Number(vehicle.pricePerDay), hours);
 
   const metadata: Record<string, string> = {
     userId:          String(userId),
@@ -331,7 +368,7 @@ export async function createPaymentIntent(
     licenseNumber:   input.licenseNumber.slice(0, 490),
     licenseExpiry:   input.licenseExpiry,
     licenseCountry:  input.licenseCountry.slice(0, 490),
-    rentalDays:      String(days),
+    rentalDays:      String(Math.ceil(hours)), // stores rental hours
     subtotal:        String(pricing.subtotal),
     serviceFee:      String(pricing.serviceFee),
     taxAmount:       String(pricing.taxAmount),
@@ -346,7 +383,7 @@ export async function createPaymentIntent(
     payment_method_types: ['card'],
     metadata,
     receipt_email:        input.customerEmail,
-    description:          `${vehicle.name} — ${days} day${days !== 1 ? 's' : ''} (${input.startDate} → ${input.endDate})`,
+    description:          `${vehicle.name} — ${rentalDurationLabel(hours)} (${input.startDate} → ${input.endDate})`,
   });
 
   return { clientSecret: intent.client_secret!, paymentIntentId: intent.id };
@@ -403,8 +440,8 @@ export async function verifyAndCreateFromIntent(
     );
   }
 
-  const days     = calcRentalDays(startDate, endDate);
-  const pricing  = calcPricing(Number(vehicle.pricePerDay), days);
+  const hours    = calcRentalHours(startDate, endDate);
+  const pricing  = await pricingWithOffers(Number(vehicle.pricePerDay), hours);
   const expected = Math.round(pricing.totalPrice * 100);
   const charged  = intent.amount_received ?? 0;
 
@@ -434,7 +471,7 @@ export async function verifyAndCreateFromIntent(
       licenseExpiry:         new Date(meta.licenseExpiry),
       licenseCountry:        meta.licenseCountry,
       notes:                 meta.notes || null,
-      rentalDays:            days,
+      rentalDays:            Math.ceil(hours), // stores rental hours
       subtotal:              pricing.subtotal,
       serviceFee:            pricing.serviceFee,
       taxAmount:             pricing.taxAmount,
@@ -447,6 +484,14 @@ export async function verifyAndCreateFromIntent(
       vehicle: { select: { name: true, image: true, brand: true, year: true } },
     },
   });
+
+  // Fire-and-forget: notification failure must not affect booking confirmation
+  createBookingPaidNotification(
+    booking.id,
+    booking.customerName,
+    booking.vehicle.name,
+    pricing.totalPrice,
+  ).catch(() => {});
 
   return toBookingResponse(booking);
 }

@@ -52,16 +52,16 @@ function AdminVehicles() {
         seats: Number(data.seats),
         pricePerDay: Number(data.pricePerDay),
         location: data.location,
-        image: data.image || "https://images.unsplash.com/photo-1617788138017-80ad40651399?w=1200&q=80&auto=format&fit=crop",
+        image: data.image,
         description: data.description,
         features: ["Premium Audio", "Heated Seats", "Apple CarPlay"],
         specs: {
-          mileage: data.mileage || "25 mpg",
-          engine: data.engine || "2.0L Turbo",
-          topSpeed: data.topSpeed || "140 mph",
-          acceleration: data.acceleration || "6.5s 0-60",
+          mileage: data.mileage || "N/A",
+          engine: data.engine || "N/A",
+          topSpeed: data.topSpeed || "N/A",
+          acceleration: data.acceleration || "N/A",
         },
-        images: [data.image || "https://images.unsplash.com/photo-1617788138017-80ad40651399?w=1200&q=80&auto=format&fit=crop"],
+        images: [data.image],
       }),
     onSuccess: (newVehicle) => {
       toast.success(`${newVehicle.name} successfully added to the fleet!`);

@@ -46,17 +46,17 @@ import { useDebounce } from "@/hooks/useDebounce";
 // All filter state lives in the URL — filters survive navigation and are shareable.
 
 const searchSchema = z.object({
-  q: z.string().catch(""),
-  sort: z.string().catch("recommended"),
-  minPrice: z.coerce.number().catch(PRICE_RANGE_MIN),
-  maxPrice: z.coerce.number().catch(PRICE_RANGE_MAX),
+  q: z.string().optional().catch(""),
+  sort: z.string().optional().catch("recommended"),
+  minPrice: z.coerce.number().optional().catch(PRICE_RANGE_MIN),
+  maxPrice: z.coerce.number().optional().catch(PRICE_RANGE_MAX),
   // Arrays encoded as comma-separated strings: "sedan,suv"
-  types: z.string().catch(""),
-  fuels: z.string().catch(""),
-  tx: z.string().catch(""),
-  seats: z.coerce.number().nullable().catch(null),
-  page: z.coerce.number().catch(1),
-  view: z.enum(["grid", "list"]).catch("grid"),
+  types: z.string().optional().catch(""),
+  fuels: z.string().optional().catch(""),
+  tx: z.string().optional().catch(""),
+  seats: z.coerce.number().nullable().optional().catch(null),
+  page: z.coerce.number().optional().catch(1),
+  view: z.enum(["grid", "list"]).optional().catch("grid"),
 });
 
 type VehicleSearch = z.infer<typeof searchSchema>;
@@ -91,6 +91,15 @@ function VehiclesPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
 
+  // Fallback defaults for optional search params to satisfy TypeScript
+  const q = search.q ?? "";
+  const sort = search.sort ?? "recommended";
+  const minPrice = search.minPrice ?? PRICE_RANGE_MIN;
+  const maxPrice = search.maxPrice ?? PRICE_RANGE_MAX;
+  const page = search.page ?? 1;
+  const view = search.view ?? "grid";
+  const seats = search.seats ?? null;
+
   // Helper: update one or more search params and reset page to 1
   const set = (updates: Partial<VehicleSearch> & { page?: number }) =>
     navigate({ search: (prev) => ({ ...prev, ...updates }) });
@@ -100,17 +109,17 @@ function VehiclesPage() {
       search: {
         q: "", sort: "recommended",
         minPrice: PRICE_RANGE_MIN, maxPrice: PRICE_RANGE_MAX,
-        types: "", fuels: "", tx: "", seats: null, page: 1, view: search.view,
+        types: "", fuels: "", tx: "", seats: null, page: 1, view: view,
       },
     });
 
   // Parse comma-separated arrays from URL
-  const types = parseList(search.types);
-  const fuels = parseList(search.fuels);
-  const transmissions = parseList(search.tx);
+  const types = parseList(search.types ?? "");
+  const fuels = parseList(search.fuels ?? "");
+  const transmissions = parseList(search.tx ?? "");
 
   // Debounce the search query so we don't fire on every keystroke
-  const debouncedQ = useDebounce(search.q);
+  const debouncedQ = useDebounce(q);
 
   // Apply all filters (pure function imported from hook)
   const filtered = useMemo(
@@ -119,25 +128,25 @@ function VehiclesPage() {
         data ?? [],
         {
           search: debouncedQ,
-          sort: search.sort as SortOption,
-          price: [search.minPrice, search.maxPrice],
+          sort: sort as SortOption,
+          price: [minPrice, maxPrice],
           types,
           fuels,
           transmissions,
-          minSeats: search.seats,
+          minSeats: seats,
         },
         debouncedQ,
       ),
-    [data, debouncedQ, search.sort, search.minPrice, search.maxPrice, search.types, search.fuels, search.tx, search.seats],
+    [data, debouncedQ, sort, minPrice, maxPrice, types, fuels, transmissions, seats],
   );
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / VEHICLES_PER_PAGE));
-  const currentPage = Math.min(search.page, pageCount);
+  const currentPage = Math.min(page, pageCount);
   const paginated = filtered.slice((currentPage - 1) * VEHICLES_PER_PAGE, currentPage * VEHICLES_PER_PAGE);
 
   const hasActiveFilters =
-    search.q || types.length || fuels.length || transmissions.length ||
-    search.seats || search.minPrice > PRICE_RANGE_MIN || search.maxPrice < PRICE_RANGE_MAX;
+    q || types.length || fuels.length || transmissions.length ||
+    seats || minPrice > PRICE_RANGE_MIN || maxPrice < PRICE_RANGE_MAX;
 
   const filterPanel = (
     <div className="space-y-6">
@@ -145,15 +154,15 @@ function VehiclesPage() {
         <Label className="text-xs font-semibold uppercase tracking-wider">Price per day</Label>
         <div className="mt-4">
           <Slider
-            value={[search.minPrice, search.maxPrice]}
+            value={[minPrice, maxPrice]}
             onValueChange={([min, max]) => set({ minPrice: min, maxPrice: max, page: 1 })}
             min={PRICE_RANGE_MIN}
             max={PRICE_RANGE_MAX}
             step={PRICE_RANGE_STEP}
           />
           <div className="mt-2 flex justify-between text-sm text-muted-foreground">
-            <span>${search.minPrice}</span>
-            <span>${search.maxPrice}</span>
+            <span>${minPrice}</span>
+            <span>${maxPrice}</span>
           </div>
         </div>
       </div>
@@ -184,8 +193,8 @@ function VehiclesPage() {
             <Button
               key={n}
               size="sm"
-              variant={search.seats === n ? "default" : "outline"}
-              onClick={() => set({ seats: search.seats === n ? null : n, page: 1 })}
+              variant={seats === n ? "default" : "outline"}
+              onClick={() => set({ seats: seats === n ? null : n, page: 1 })}
             >
               {n}+
             </Button>
@@ -232,7 +241,7 @@ function VehiclesPage() {
               <div className="relative min-w-0 flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  value={search.q}
+                  value={q}
                   onChange={(e) => set({ q: e.target.value, page: 1 })}
                   placeholder="Search by name or brand…"
                   className="pl-10"
@@ -248,7 +257,7 @@ function VehiclesPage() {
                     Filters
                     {hasActiveFilters && (
                       <span className="ml-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-                        {[types.length > 0, fuels.length > 0, transmissions.length > 0, !!search.seats].filter(Boolean).length}
+                        {[types.length > 0, fuels.length > 0, transmissions.length > 0, !!seats].filter(Boolean).length}
                       </span>
                     )}
                   </Button>
@@ -262,7 +271,7 @@ function VehiclesPage() {
               </Sheet>
 
               <Select
-                value={search.sort}
+                value={sort}
                 onValueChange={(v) => set({ sort: v, page: 1 })}
               >
                 <SelectTrigger className="w-44">
@@ -278,7 +287,7 @@ function VehiclesPage() {
               <div className="flex rounded-lg border border-border p-0.5">
                 <Button
                   size="icon"
-                  variant={search.view === "grid" ? "secondary" : "ghost"}
+                  variant={view === "grid" ? "secondary" : "ghost"}
                   className="h-8 w-8"
                   onClick={() => set({ view: "grid" })}
                   aria-label="Grid view"
@@ -287,7 +296,7 @@ function VehiclesPage() {
                 </Button>
                 <Button
                   size="icon"
-                  variant={search.view === "list" ? "secondary" : "ghost"}
+                  variant={view === "list" ? "secondary" : "ghost"}
                   className="h-8 w-8"
                   onClick={() => set({ view: "list" })}
                   aria-label="List view"
@@ -300,7 +309,7 @@ function VehiclesPage() {
             {/* Results */}
             <div className="mt-6">
               {isLoading ? (
-                <div className={search.view === "grid" ? "grid gap-6 sm:grid-cols-2 xl:grid-cols-3" : "space-y-4"}>
+                <div className={view === "grid" ? "grid gap-6 sm:grid-cols-2 xl:grid-cols-3" : "space-y-4"}>
                   {Array.from({ length: 6 }).map((_, i) => (
                     <VehicleCardSkeleton key={i} />
                   ))}
@@ -311,9 +320,9 @@ function VehiclesPage() {
                   description="Try adjusting your filters or search query."
                 />
               ) : (
-                <div className={search.view === "grid" ? "grid gap-6 sm:grid-cols-2 xl:grid-cols-3" : "space-y-4"}>
+                <div className={view === "grid" ? "grid gap-6 sm:grid-cols-2 xl:grid-cols-3" : "space-y-4"}>
                   {paginated.map((v) => (
-                    <VehicleCard key={v.id} vehicle={v} variant={search.view} />
+                    <VehicleCard key={v.id} vehicle={v} variant={view} />
                   ))}
                 </div>
               )}

@@ -3,6 +3,7 @@ import { requireAdmin } from '../../middleware/auth.middleware.js';
 import { validate } from '../../middleware/validate.middleware.js';
 import { asyncHandler } from '../../lib/async-handler.js';
 import * as controller from './admin.controller.js';
+import * as notifController from '../notifications/notification.controller.js';
 import {
   userIdParamSchema,
   kycIdParamSchema,
@@ -65,6 +66,14 @@ adminRouter.patch(
   validate(kycReviewSchema),
   asyncHandler(controller.reviewKyc),
 );
+
+// ── Dashboard statistics (Phase 7) ────────────────────────────────────────
+
+// ── Notifications ─────────────────────────────────────────────────────────
+
+adminRouter.get('/notifications',            asyncHandler(notifController.list));
+adminRouter.patch('/notifications/read-all', asyncHandler(notifController.markAllRead));
+adminRouter.patch('/notifications/:id/read', asyncHandler(notifController.markOneRead));
 
 // ── Dashboard statistics (Phase 7) ────────────────────────────────────────
 

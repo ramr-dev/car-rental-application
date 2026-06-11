@@ -3,6 +3,7 @@ import { requireAdmin } from '../../middleware/auth.middleware.js';
 import { validate } from '../../middleware/validate.middleware.js';
 import { asyncHandler } from '../../lib/async-handler.js';
 import * as controller from './vehicle.controller.js';
+import { vehicleImageUpload } from '../../lib/upload.js';
 import {
   vehicleListQuerySchema,
   vehicleIdParamSchema,
@@ -11,6 +12,16 @@ import {
 } from './vehicle.schema.js';
 
 export const vehicleRouter = Router();
+
+// ── POST /api/vehicles/upload-image ───────────────────────────────────────
+// Admin — upload a vehicle photo; returns { url } for the stored file.
+// Must be registered BEFORE /:id routes to avoid param capture.
+vehicleRouter.post(
+  '/upload-image',
+  requireAdmin,
+  vehicleImageUpload.single('image'),
+  asyncHandler(controller.uploadImage),
+);
 
 // ── GET /api/vehicles ──────────────────────────────────────────────────────
 // Public — list vehicles with optional filters, sort, and pagination
@@ -26,6 +37,14 @@ vehicleRouter.get(
   '/:id',
   validate(vehicleIdParamSchema, 'params'),
   asyncHandler(controller.getById),
+);
+
+// ── GET /api/vehicles/:id/booked-dates ────────────────────────────────────
+// Public — returns booked date ranges for calendar date-picker in booking form
+vehicleRouter.get(
+  '/:id/booked-dates',
+  validate(vehicleIdParamSchema, 'params'),
+  asyncHandler(controller.getBookedRanges),
 );
 
 // ── POST /api/vehicles ─────────────────────────────────────────────────────

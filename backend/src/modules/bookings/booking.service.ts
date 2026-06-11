@@ -2,6 +2,7 @@ import { randomInt } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/error.middleware.js';
+import { getActiveForPricing, bestDiscount } from '../offers/offer.service.js';
 import type { JwtPayload } from '../../middleware/auth.middleware.js';
 import type {
   BookingListQuery,
@@ -21,15 +22,26 @@ function generateBookingId(): string {
   return `BK-${randomInt(10_000_000, 99_999_999)}`;
 }
 
-function calcRentalDays(start: Date, end: Date): number {
-  return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86_400_000));
+function calcRentalHours(start: Date, end: Date): number {
+  return Math.max(6, (end.getTime() - start.getTime()) / 3_600_000);
 }
 
-function calcPricing(pricePerDay: number, days: number) {
-  const subtotal    = round2(pricePerDay * days);
-  const serviceFee  = round2(subtotal * SERVICE_FEE_RATE);
-  const taxAmount   = round2((subtotal + serviceFee) * TAX_RATE);
-  const totalPrice  = round2(subtotal + serviceFee + taxAmount);
+function calcPricing(pricePerDay: number, hours: number, discountPercent = 0) {
+  if (hours < 12) {
+    const subtotal   = round2((pricePerDay / 12) * hours);
+    const serviceFee = round2(subtotal * SERVICE_FEE_RATE);
+    const taxAmount  = round2((subtotal + serviceFee) * TAX_RATE);
+    const totalPrice = round2(subtotal + serviceFee + taxAmount);
+    return { subtotal, serviceFee, taxAmount, totalPrice, depositAmount: SECURITY_DEPOSIT };
+  }
+
+  const days         = Math.max(1, Math.ceil(hours / 24));
+  const base         = round2(days * pricePerDay);
+  const discountAmt  = round2(base * (discountPercent / 100));
+  const subtotal     = round2(base - discountAmt);
+  const serviceFee   = round2(subtotal * SERVICE_FEE_RATE);
+  const taxAmount    = round2((subtotal + serviceFee) * TAX_RATE);
+  const totalPrice   = round2(subtotal + serviceFee + taxAmount);
   return { subtotal, serviceFee, taxAmount, totalPrice, depositAmount: SECURITY_DEPOSIT };
 }
 
@@ -40,7 +52,10 @@ function round2(n: number): number {
 // ─── Response mapper ───────────────────────────────────────────────────────
 
 type BookingWithVehicle = Prisma.BookingGetPayload<{
-  include: { vehicle: { select: { name: true; image: true; brand: true; year: true } } };
+  include: {
+    vehicle: { select: { name: true; image: true; brand: true; year: true } };
+    review: { select: { id: true } };
+  };
 }>;
 
 function toBookingResponse(b: BookingWithVehicle) {
@@ -50,8 +65,8 @@ function toBookingResponse(b: BookingWithVehicle) {
     vehicleId:             String(b.vehicleId),
     vehicleName:           b.vehicle.name,
     vehicleImage:          b.vehicle.image,
-    startDate:             b.startDate.toISOString().split('T')[0],
-    endDate:               b.endDate.toISOString().split('T')[0],
+    startDate:             b.startDate.toISOString().slice(0, 16),
+    endDate:               b.endDate.toISOString().slice(0, 16),
     pickupLocation:        b.pickupLocation,
     dropoffLocation:       b.dropoffLocation,
     totalPrice:            Number(b.totalPrice),
@@ -73,11 +88,13 @@ function toBookingResponse(b: BookingWithVehicle) {
     paymentStatus:         b.paymentStatus,
     paidAt:                b.paidAt?.toISOString() ?? undefined,
     createdAt:             b.createdAt.toISOString().split('T')[0],
+    isReviewed:            !!b.review,
   };
 }
 
 const vehicleInclude = {
   vehicle: { select: { name: true, image: true, brand: true, year: true } },
+  review: { select: { id: true } },
 } as const;
 
 // ─── list ──────────────────────────────────────────────────────────────────
@@ -169,9 +186,12 @@ export async function create(input: CreateBookingInput, caller: JwtPayload) {
     );
   }
 
-  // 3. Calculate pricing
-  const days    = calcRentalDays(startDate, endDate);
-  const pricing = calcPricing(Number(vehicle.pricePerDay), days);
+  // 3. Calculate pricing using DB-driven offer discounts
+  const hours        = calcRentalHours(startDate, endDate);
+  const activeOffers = await getActiveForPricing();
+  const days         = hours < 12 ? 0 : Math.max(1, Math.ceil(hours / 24));
+  const discPct      = bestDiscount(days, activeOffers);
+  const pricing      = calcPricing(Number(vehicle.pricePerDay), hours, discPct);
 
   // 4. Generate a unique booking ID (retry once on collision — extremely rare)
   let bookingId = generateBookingId();
@@ -197,7 +217,7 @@ export async function create(input: CreateBookingInput, caller: JwtPayload) {
       licenseExpiry:  new Date(input.licenseExpiry),
       licenseCountry: input.licenseCountry,
       notes:          input.notes,
-      rentalDays:     days,
+      rentalDays:     Math.ceil(hours), // stores rental hours in this field
       subtotal:       pricing.subtotal,
       serviceFee:     pricing.serviceFee,
       taxAmount:      pricing.taxAmount,

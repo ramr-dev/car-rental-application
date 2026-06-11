@@ -30,4 +30,5 @@ export interface Booking {
   stripePaymentIntentId?: string;
   paymentStatus?: string;
   paidAt?: string;
+  isReviewed?: boolean;
 }

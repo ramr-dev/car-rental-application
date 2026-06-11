@@ -25,9 +25,11 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { vehicleService } from "@/lib/api/vehicle.service";
+import { offerService } from "@/lib/api/offer.service";
 import { useBookingDraft } from "@/store/booking";
 import { BOOKING_STEPS, SECURITY_DEPOSIT, TAX_RATE, SERVICE_FEE_RATE } from "@/constants";
 import { calcBookingTotal } from "@/utils/formatters";
+import { OffersBanner } from "@/components/offers/OffersBanner";
 import {
   step0Schema,
   step1Schema,
@@ -40,10 +42,36 @@ import {
   SummaryRow,
   PriceRow,
 } from "@/features/customer/booking/components/BookingHelpers";
+import { BookingDatePicker } from "@/features/customer/booking/components/BookingDatePicker";
 
 export const Route = createFileRoute("/booking/$id")({
   component: BookingPage,
 });
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+
+function fmtDT(dt: string | undefined): string {
+  if (!dt) return "—";
+  const tIdx = dt.indexOf("T");
+  if (tIdx === -1) return dt;
+  const datePart = dt.slice(0, tIdx);
+  const timePart = dt.slice(tIdx + 1, tIdx + 6); // HH:MM
+  const [h, m] = timePart.split(":").map(Number);
+  const ampm = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 || 12;
+  return `${datePart} at ${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
+function calcDurationLabel(startDT: string, endDT: string): string {
+  const diffMs = new Date(endDT).getTime() - new Date(startDT).getTime();
+  if (diffMs <= 0) return "";
+  const totalHours = diffMs / 3_600_000;
+  const days  = Math.floor(totalHours / 24);
+  const hours = Math.round(totalHours % 24);
+  if (days === 0) return `${Math.round(totalHours)} hour${Math.round(totalHours) !== 1 ? "s" : ""}`;
+  if (hours === 0) return `${days} day${days !== 1 ? "s" : ""}`;
+  return `${days} day${days !== 1 ? "s" : ""} ${hours} hr${hours !== 1 ? "s" : ""}`;
+}
 
 // ─── Main component ────────────────────────────────────────────────────────
 
@@ -56,16 +84,37 @@ function BookingPage() {
     queryFn: () => vehicleService.get(id),
   });
 
+  const { data: bookedRanges = [] } = useQuery({
+    queryKey: ["vehicle-booked-dates", id],
+    queryFn: () => vehicleService.getBookedRanges(id),
+    staleTime: 60_000,
+  });
+
+  const { data: activeOffers = [] } = useQuery({
+    queryKey: ["offers"],
+    queryFn: offerService.listActive,
+    staleTime: 5 * 60_000,
+  });
+
   const [step, setStep] = useState(0);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [rangeConflictError, setRangeConflictError] = useState("");
+
+  // Draft stores full datetimes ("YYYY-MM-DDTHH:MM"). Decompose for form init.
+  const draftStartDate = draft.startDate?.slice(0, 10) ?? "";
+  const draftStartTime = draft.startDate?.length === 16 ? draft.startDate.slice(11, 16) : "10:00";
+  const draftEndDate   = draft.endDate?.slice(0, 10) ?? "";
+  const draftEndTime   = draft.endDate?.length === 16 ? draft.endDate.slice(11, 16) : "10:00";
 
   const step0Form = useForm<Step0Form>({
     resolver: zodResolver(step0Schema),
     defaultValues: {
-      pickupLocation: draft.pickupLocation ?? "",
+      pickupLocation:  draft.pickupLocation ?? "",
       dropoffLocation: draft.dropoffLocation ?? "",
-      startDate: draft.startDate?.slice(0, 10) ?? "",
-      endDate: draft.endDate?.slice(0, 10) ?? "",
+      startDate: draftStartDate,
+      startTime: draftStartTime,
+      endDate:   draftEndDate,
+      endTime:   draftEndTime,
     },
   });
 
@@ -73,18 +122,18 @@ function BookingPage() {
     resolver: zodResolver(step1Schema),
     defaultValues: {
       fullName: draft.fullName ?? "",
-      email: draft.email ?? "",
-      phone: draft.phone ?? "",
+      email:    draft.email ?? "",
+      phone:    draft.phone ?? "",
     },
   });
 
   const step2Form = useForm<Step2Form>({
     resolver: zodResolver(step2Schema),
     defaultValues: {
-      licenseNumber: draft.licenseNumber ?? "",
-      licenseExpiry: draft.licenseExpiry ?? "",
+      licenseNumber:  draft.licenseNumber ?? "",
+      licenseExpiry:  draft.licenseExpiry ?? "",
       licenseCountry: draft.licenseCountry ?? "",
-      notes: draft.notes ?? "",
+      notes:          draft.notes ?? "",
     },
   });
 
@@ -119,27 +168,54 @@ function BookingPage() {
 
   // ─── Derived values ─────────────────────────────────────────────────────
 
-  const days =
+  const rentalHours =
     draft.startDate && draft.endDate
-      ? Math.max(
-          1,
-          Math.ceil(
-            (new Date(draft.endDate).getTime() - new Date(draft.startDate).getTime()) /
-              86_400_000,
-          ),
-        )
-      : 1;
+      ? Math.max(6, (new Date(draft.endDate).getTime() - new Date(draft.startDate).getTime()) / 3_600_000)
+      : 12;
 
-  const pricing = calcBookingTotal(vehicle.pricePerDay, days, 0, SERVICE_FEE_RATE, TAX_RATE, SECURITY_DEPOSIT);
+  const hourlyRate = Math.round((vehicle.pricePerDay / 12) * 100) / 100;
+
+  const pricing = calcBookingTotal(vehicle.pricePerDay, rentalHours, 0, SERVICE_FEE_RATE, TAX_RATE, SECURITY_DEPOSIT, activeOffers);
+  const billedLabel = pricing.isHourly
+    ? `${Math.round(rentalHours)} hrs billed`
+    : `${pricing.days} day${pricing.days !== 1 ? "s" : ""} billed`;
 
   // ─── Step advance handlers ───────────────────────────────────────────────
 
   const handleStep0 = step0Form.handleSubmit((data) => {
+    const startDT = `${data.startDate}T${data.startTime}`;
+    const endDT   = `${data.endDate}T${data.endTime}`;
+    const start   = new Date(startDT);
+    const end     = new Date(endDT);
+
+    // Validate minimum 6-hour rental
+    const diffHours = (end.getTime() - start.getTime()) / 3_600_000;
+    if (diffHours < 6) {
+      step0Form.setError("endTime", {
+        message: `Return must be at least 6 hours after pickup (currently ${diffHours > 0 ? Math.round(diffHours) + "h" : "invalid"})`,
+      });
+      return;
+    }
+
+    // Check that the selected range doesn't span any booked dates
+    const conflict = bookedRanges.some((r) => {
+      const rs = new Date(r.startDate + "T00:00:00");
+      const re = new Date(r.endDate   + "T23:59:59");
+      return start < re && end > rs;
+    });
+    if (conflict) {
+      setRangeConflictError(
+        "Your selected dates overlap with an existing booking. Please choose different dates.",
+      );
+      return;
+    }
+
+    setRangeConflictError("");
     setDraft({
-      pickupLocation: data.pickupLocation,
+      pickupLocation:  data.pickupLocation,
       dropoffLocation: data.dropoffLocation,
-      startDate: data.startDate,
-      endDate: data.endDate,
+      startDate: startDT,
+      endDate:   endDT,
     });
     setStep(1);
   });
@@ -151,10 +227,10 @@ function BookingPage() {
 
   const handleStep2 = step2Form.handleSubmit((data) => {
     setDraft({
-      licenseNumber: data.licenseNumber,
-      licenseExpiry: data.licenseExpiry,
+      licenseNumber:  data.licenseNumber,
+      licenseExpiry:  data.licenseExpiry,
       licenseCountry: data.licenseCountry,
-      notes: data.notes,
+      notes:          data.notes,
     });
     setStep(3);
   });
@@ -166,6 +242,13 @@ function BookingPage() {
   return (
     <PublicLayout>
       <div className="container mx-auto px-4 py-10 lg:px-8">
+
+        {/* ── Offers banner ────────────────────────────────────────────── */}
+        {activeOffers.length > 0 && (
+          <div className="mb-6">
+            <OffersBanner offers={activeOffers} />
+          </div>
+        )}
 
         {/* ── Stepper ──────────────────────────────────────────────────── */}
         <nav aria-label="Booking steps" className="mb-10">
@@ -214,7 +297,6 @@ function BookingPage() {
             {step === 0 && (
               <Card className="p-6 lg:p-8">
                 <h2 className="font-display text-2xl font-semibold">
-                  <CalendarDays className="mr-2 inline h-6 w-6 text-primary" />
                   Trip Details
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -222,34 +304,36 @@ function BookingPage() {
                 </p>
 
                 <form id="step0-form" onSubmit={handleStep0} className="mt-6 space-y-5">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label>Pickup Date *</Label>
-                      <Input
-                        type="date"
-                        min={new Date().toISOString().slice(0, 10)}
-                        {...step0Form.register("startDate")}
-                      />
-                      {step0Form.formState.errors.startDate && (
-                        <p className="mt-1 text-xs text-destructive">
-                          {step0Form.formState.errors.startDate.message}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <Label>Return Date *</Label>
-                      <Input
-                        type="date"
-                        min={step0Form.watch("startDate") || new Date().toISOString().slice(0, 10)}
-                        {...step0Form.register("endDate")}
-                      />
-                      {step0Form.formState.errors.endDate && (
-                        <p className="mt-1 text-xs text-destructive">
-                          {step0Form.formState.errors.endDate.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                  <BookingDatePicker
+                    startDate={step0Form.watch("startDate")}
+                    startTime={step0Form.watch("startTime")}
+                    endDate={step0Form.watch("endDate")}
+                    endTime={step0Form.watch("endTime")}
+                    onStartDateChange={(date) => {
+                      step0Form.setValue("startDate", date, { shouldValidate: true });
+                      step0Form.clearErrors("endTime");
+                      setRangeConflictError("");
+                    }}
+                    onStartTimeChange={(time) => {
+                      step0Form.setValue("startTime", time, { shouldValidate: true });
+                      step0Form.clearErrors("endTime");
+                    }}
+                    onEndDateChange={(date) => {
+                      step0Form.setValue("endDate", date, { shouldValidate: true });
+                      step0Form.clearErrors("endTime");
+                      setRangeConflictError("");
+                    }}
+                    onEndTimeChange={(time) => {
+                      step0Form.setValue("endTime", time, { shouldValidate: true });
+                      step0Form.clearErrors("endTime");
+                    }}
+                    bookedRanges={bookedRanges}
+                    startDateError={step0Form.formState.errors.startDate?.message}
+                    startTimeError={step0Form.formState.errors.startTime?.message}
+                    endDateError={step0Form.formState.errors.endDate?.message}
+                    endTimeError={step0Form.formState.errors.endTime?.message}
+                    rangeConflictError={rangeConflictError}
+                  />
 
                   <div>
                     <Label>Pickup Location *</Label>
@@ -399,7 +483,7 @@ function BookingPage() {
                       <Input
                         type="date"
                         min={new Date().toISOString().slice(0, 10)}
-                        className="mt-1"
+                        className="mt-1 [color-scheme:light] dark:[color-scheme:dark]"
                         {...step2Form.register("licenseExpiry")}
                       />
                       {step2Form.formState.errors.licenseExpiry && (
@@ -465,9 +549,14 @@ function BookingPage() {
                 {/* Trip overview */}
                 <div className="mt-6 space-y-0 divide-y divide-border rounded-xl border border-border overflow-hidden">
                   <SummaryRow icon={<Car className="h-4 w-4" />} label="Vehicle" value={vehicle.name} />
-                  <SummaryRow icon={<MapPin className="h-4 w-4" />} label="Pickup" value={`${draft.pickupLocation || "—"} · ${draft.startDate || "—"}`} />
-                  <SummaryRow icon={<MapPin className="h-4 w-4" />} label="Drop-off" value={`${draft.dropoffLocation || draft.pickupLocation || "—"} · ${draft.endDate || "—"}`} />
-                  <SummaryRow icon={<CalendarDays className="h-4 w-4" />} label="Duration" value={`${days} day${days !== 1 ? "s" : ""}`} />
+                  <SummaryRow icon={<MapPin className="h-4 w-4" />} label="Pickup"
+                    value={`${draft.pickupLocation || "—"} · ${fmtDT(draft.startDate)}`} />
+                  <SummaryRow icon={<MapPin className="h-4 w-4" />} label="Drop-off"
+                    value={`${draft.dropoffLocation || draft.pickupLocation || "—"} · ${fmtDT(draft.endDate)}`} />
+                  <SummaryRow icon={<CalendarDays className="h-4 w-4" />} label="Duration"
+                    value={draft.startDate && draft.endDate
+                      ? `${calcDurationLabel(draft.startDate, draft.endDate)} (${billedLabel})`
+                      : `${Math.round(rentalHours)} hours`} />
                   <SummaryRow icon={<User className="h-4 w-4" />} label="Customer" value={`${draft.fullName || "—"} · ${draft.phone || "—"}`} />
                   <SummaryRow icon={<Mail className="h-4 w-4" />} label="Email" value={draft.email || "—"} />
                   <SummaryRow icon={<FileText className="h-4 w-4" />} label="License" value={`${draft.licenseNumber || "—"} · ${draft.licenseCountry || "—"}`} />
@@ -477,7 +566,23 @@ function BookingPage() {
                 <div className="mt-6 space-y-3">
                   <h3 className="font-display text-lg font-semibold">Price Breakdown</h3>
                   <div className="space-y-2 text-sm">
-                    <PriceRow label={`Daily rate ($${vehicle.pricePerDay} × ${days} day${days !== 1 ? "s" : ""})`} amount={pricing.subtotal} />
+                    {pricing.isHourly ? (
+                      <PriceRow label={`Hourly rate ($${hourlyRate}/hr × ${Math.round(rentalHours)} hrs)`} amount={pricing.subtotal} />
+                    ) : (
+                      <>
+                        <PriceRow
+                          label={`Daily rate ($${vehicle.pricePerDay.toLocaleString()}/day × ${pricing.days} day${pricing.days !== 1 ? "s" : ""})`}
+                          amount={pricing.subtotal + pricing.discount}
+                        />
+                        {pricing.appliedOffer && (
+                          <PriceRow
+                            label={`${pricing.appliedOffer.title} (${pricing.appliedOffer.discountPercent}% off)`}
+                            amount={pricing.discount}
+                            negative
+                          />
+                        )}
+                      </>
+                    )}
                     <PriceRow label={`Service fee (${Math.round(SERVICE_FEE_RATE * 100)}%)`} amount={pricing.fees} />
                     <PriceRow label={`Tax (${Math.round(TAX_RATE * 100)}%)`} amount={pricing.tax} />
                     <Separator />
@@ -541,14 +646,28 @@ function BookingPage() {
 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Daily rate</span>
-                    <span className="font-semibold">${vehicle.pricePerDay}</span>
+                    <span className="text-muted-foreground">{pricing.isHourly ? "Hourly rate" : "Daily rate"}</span>
+                    <span className="font-semibold">
+                      {pricing.isHourly ? `$${hourlyRate}/hr` : `$${vehicle.pricePerDay.toLocaleString()}/day`}
+                    </span>
                   </div>
-                  {days > 1 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{days} days</span>
-                      <span className="font-semibold">${pricing.subtotal}</span>
-                    </div>
+                  {draft.startDate && draft.endDate && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          {pricing.isHourly
+                            ? `${Math.round(rentalHours)} hrs`
+                            : `${pricing.days} day${pricing.days !== 1 ? "s" : ""}`}
+                        </span>
+                        <span className="font-semibold">${pricing.subtotal + pricing.discount}</span>
+                      </div>
+                      {pricing.appliedOffer && (
+                        <div className="flex justify-between text-success text-xs">
+                          <span>{pricing.appliedOffer.title}</span>
+                          <span>-${pricing.discount.toLocaleString()}</span>
+                        </div>
+                      )}
+                    </>
                   )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Service fee</span>
@@ -571,10 +690,11 @@ function BookingPage() {
 
                 {draft.startDate && draft.endDate && (
                   <div className="mt-4 rounded-lg bg-success/10 p-3 text-xs text-success">
-                    <p className="font-medium">
-                      {draft.startDate} → {draft.endDate}
+                    <p className="font-medium">{fmtDT(draft.startDate)}</p>
+                    <p className="font-medium">→ {fmtDT(draft.endDate)}</p>
+                    <p className="mt-1 text-success/70">
+                      {calcDurationLabel(draft.startDate, draft.endDate)} · ${pricing.subtotal} after discounts
                     </p>
-                    <p className="text-success/70">{days} day{days !== 1 ? "s" : ""} rental</p>
                   </div>
                 )}
               </div>
@@ -595,4 +715,3 @@ function BookingPage() {
     </PublicLayout>
   );
 }
-

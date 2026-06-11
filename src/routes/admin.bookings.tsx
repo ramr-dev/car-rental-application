@@ -194,8 +194,8 @@ function AdminBookings() {
                               </div>
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
-                              <p>{b.startDate}</p>
-                              <p>→ {b.endDate}</p>
+                              <p>{b.startDate.replace("T", " ")}</p>
+                              <p>→ {b.endDate.replace("T", " ")}</p>
                             </TableCell>
                             <TableCell className="font-semibold text-sm">
                               ${b.totalPrice.toLocaleString()}

@@ -26,6 +26,7 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { vehicleService } from "@/lib/api/vehicle.service";
 import { paymentService } from "@/lib/api/payment.service";
+import { offerService } from "@/lib/api/offer.service";
 import { useBookingDraft } from "@/store/booking";
 import { useAuth } from "@/store/auth";
 import { useTheme } from "@/store/theme";
@@ -125,6 +126,18 @@ function getStripeAppearance(isDark: boolean): StripeElementsOptions["appearance
 
 // ─── Page wrapper — fetches clientSecret and mounts Elements ──────────────
 
+function fmtDT(dt: string | undefined): string {
+  if (!dt) return "—";
+  const tIdx = dt.indexOf("T");
+  if (tIdx === -1) return dt;
+  const datePart = dt.slice(0, tIdx);
+  const timePart = dt.slice(tIdx + 1, tIdx + 6);
+  const [h, m] = timePart.split(":").map(Number);
+  const ampm = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 || 12;
+  return `${datePart} ${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
 function BookingPaymentPage() {
   const { draft } = useBookingDraft();
   const { user } = useAuth();
@@ -138,6 +151,12 @@ function BookingPaymentPage() {
     queryKey: ["vehicle", vehicleId],
     queryFn: () => vehicleService.get(vehicleId!),
     enabled: !!vehicleId,
+  });
+
+  const { data: activeOffers = [] } = useQuery({
+    queryKey: ["offers"],
+    queryFn: offerService.listActive,
+    staleTime: 5 * 60_000,
   });
 
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -186,13 +205,13 @@ function BookingPaymentPage() {
 
   if (!vehicleId || !draft.startDate) return null;
 
-  const days =
+  const rentalHours =
     draft.startDate && draft.endDate
-      ? Math.max(1, Math.ceil((new Date(draft.endDate).getTime() - new Date(draft.startDate).getTime()) / 86_400_000))
-      : 1;
+      ? Math.max(6, (new Date(draft.endDate).getTime() - new Date(draft.startDate).getTime()) / 3_600_000)
+      : 12;
 
   const pricing = vehicle
-    ? calcBookingTotal(vehicle.pricePerDay, days, 0, SERVICE_FEE_RATE, TAX_RATE, SECURITY_DEPOSIT)
+    ? calcBookingTotal(vehicle.pricePerDay, rentalHours, 0, SERVICE_FEE_RATE, TAX_RATE, SECURITY_DEPOSIT, activeOffers)
     : null;
 
   return (
@@ -299,9 +318,14 @@ function BookingPaymentPage() {
                         <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                         <div>
                           <p className="text-xs text-muted-foreground">Trip dates</p>
-                          <p className="font-medium">
-                            {draft.startDate} → {draft.endDate}
-                            <span className="ml-1 text-muted-foreground">({days} day{days !== 1 ? "s" : ""})</span>
+                          <p className="font-medium">{fmtDT(draft.startDate)}</p>
+                          <p className="font-medium">→ {fmtDT(draft.endDate)}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {pricing
+                              ? pricing.isHourly
+                                ? `${Math.round(rentalHours)} hrs billed`
+                                : `${pricing.days} day${pricing.days !== 1 ? "s" : ""} billed`
+                              : `${Math.round(rentalHours)} hrs billed`}
                           </p>
                         </div>
                       </div>
@@ -334,10 +358,31 @@ function BookingPaymentPage() {
                       <>
                         <Separator className="my-4" />
                         <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">${vehicle.pricePerDay}/day × {days}</span>
-                            <span>${pricing.subtotal}</span>
-                          </div>
+                          {pricing.isHourly ? (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">
+                                ${Math.round(vehicle.pricePerDay / 12)}/hr × {Math.round(rentalHours)} hrs
+                              </span>
+                              <span>${pricing.subtotal}</span>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  ${vehicle.pricePerDay.toLocaleString()}/day × {pricing.days} day{pricing.days !== 1 ? "s" : ""}
+                                </span>
+                                <span>${pricing.subtotal + pricing.discount}</span>
+                              </div>
+                              {pricing.appliedOffer && (
+                                <div className="flex justify-between text-success">
+                                  <span>
+                                    {pricing.appliedOffer.title} ({pricing.appliedOffer.discountPercent}% off)
+                                  </span>
+                                  <span>-${pricing.discount.toLocaleString()}</span>
+                                </div>
+                              )}
+                            </>
+                          )}
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Service fee (12%)</span>
                             <span>${pricing.fees}</span>

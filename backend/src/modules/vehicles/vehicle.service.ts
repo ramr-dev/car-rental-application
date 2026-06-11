@@ -97,7 +97,7 @@ export async function list(query: VehicleListQuery) {
 // ─── getById ───────────────────────────────────────────────────────────────
 
 export async function getById(id: number) {
-  const vehicle = await prisma.vehicle.findUnique({ where: { id } });
+  const vehicle = await prisma.vehicle.findUnique({ where: { id } }); 
   if (!vehicle) throw new AppError(404, 'Vehicle not found.', 'NOT_FOUND');
   return toVehicleResponse(vehicle);
 }
@@ -154,6 +154,30 @@ export async function update(id: number, input: UpdateVehicleInput) {
   });
 
   return toVehicleResponse(vehicle);
+}
+
+// ─── getBookedRanges ──────────────────────────────────────────────────────
+// Public — returns all confirmed/active booking date ranges for a vehicle.
+// Used by the booking form to disable already-booked dates in the calendar.
+
+export async function getBookedRanges(vehicleId: number) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const bookings = await prisma.booking.findMany({
+    where: {
+      vehicleId,
+      status: { in: ['PENDING', 'CONFIRMED', 'ACTIVE'] },
+      endDate: { gte: today },
+    },
+    select: { startDate: true, endDate: true },
+    orderBy: { startDate: 'asc' },
+  });
+
+  return bookings.map((b) => ({
+    startDate: b.startDate.toISOString().split('T')[0],
+    endDate:   b.endDate.toISOString().split('T')[0],
+  }));
 }
 
 // ─── remove ────────────────────────────────────────────────────────────────

@@ -1,12 +1,15 @@
 import multer from 'multer';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { AppError } from '../middleware/error.middleware.js';
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
-const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const IMAGE_MIME_TYPES   = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_SIZE_BYTES     = 10 * 1024 * 1024; //  10 MB
+const IMG_MAX_SIZE_BYTES =  8 * 1024 * 1024; //   8 MB
 
-const storage = multer.diskStorage({
+// ─── KYC uploader ─────────────────────────────────────────────────────────
+
+const kycStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, path.resolve('uploads/kyc'));
   },
@@ -16,20 +19,34 @@ const storage = multer.diskStorage({
   },
 });
 
-function fileFilter(
-  _req: Express.Request,
-  file: Express.Multer.File,
-  cb: multer.FileFilterCallback,
-) {
-  if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only JPEG, PNG and PDF files are allowed.'));
-  }
-}
-
 export const kycUpload = multer({
-  storage,
-  fileFilter,
+  storage: kycStorage,
+  fileFilter: (_req, file, cb) => {
+    ALLOWED_MIME_TYPES.includes(file.mimetype)
+      ? cb(null, true)
+      : cb(new Error('Only JPEG, PNG and PDF files are allowed.'));
+  },
   limits: { fileSize: MAX_SIZE_BYTES },
+});
+
+// ─── Vehicle image uploader ────────────────────────────────────────────────
+
+const vehicleImageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, path.resolve('uploads/vehicles'));
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    cb(null, `${randomUUID()}${ext}`);
+  },
+});
+
+export const vehicleImageUpload = multer({
+  storage: vehicleImageStorage,
+  fileFilter: (_req, file, cb) => {
+    IMAGE_MIME_TYPES.includes(file.mimetype)
+      ? cb(null, true)
+      : cb(new Error('Only JPEG, PNG and WebP images are allowed.'));
+  },
+  limits: { fileSize: IMG_MAX_SIZE_BYTES },
 });

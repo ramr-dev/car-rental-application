@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarRange, ShieldAlert, MapPin, Calendar, Receipt, Ban, CreditCard, CheckCircle2 } from "lucide-react";
+import { CalendarRange, ShieldAlert, MapPin, Calendar, Receipt, Ban, CreditCard, CheckCircle2, Star } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/common/EmptyState";
-import { bookingService } from "@/lib/api";
+import { bookingService, reviewService } from "@/lib/api";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/store/auth";
 import type { Booking } from "@/lib/types";
 
@@ -29,6 +31,9 @@ function BookingsPage() {
   const tabs = ["all", "confirmed", "pending", "completed", "cancelled"] as const;
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [reviewingBooking, setReviewingBooking] = useState<Booking | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
 
   const cancelMutation = useMutation({
     mutationFn: (id: string) => bookingService.cancel(id),
@@ -41,6 +46,24 @@ function BookingsPage() {
     },
     onError: () => {
       toast.error("Failed to cancel booking. Please try again.");
+    }
+  });
+
+  const submitReviewMutation = useMutation({
+    mutationFn: () => {
+      if (!reviewingBooking) throw new Error("No booking selected");
+      return reviewService.submitReview(reviewingBooking.id, reviewRating, reviewComment);
+    },
+    onSuccess: () => {
+      toast.success("Thank you for your feedback! Your review has been submitted.");
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      setReviewingBooking(null);
+      setReviewRating(5);
+      setReviewComment("");
+    },
+    onError: (err: any) => {
+      const errMsg = err.response?.data?.error || "Failed to submit review. Please try again.";
+      toast.error(errMsg);
     }
   });
 
@@ -68,6 +91,7 @@ function BookingsPage() {
                       onViewDetails={() => setSelectedBooking(b)} 
                       onCancel={() => cancelMutation.mutate(b.id)}
                       isCancelling={cancelMutation.isPending && cancelMutation.variables === b.id}
+                      onWriteReview={() => setReviewingBooking(b)}
                     />
                   ))}
                 </div>
@@ -133,7 +157,7 @@ function BookingsPage() {
                 <img src={selectedBooking.vehicleImage} alt="" className="h-20 w-28 rounded-lg object-cover border border-border" />
                 <div className="space-y-1">
                   <h4 className="font-display font-bold text-base leading-tight">{selectedBooking.vehicleName}</h4>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> {selectedBooking.startDate} → {selectedBooking.endDate}</p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> {selectedBooking.startDate.replace("T", " ")} → {selectedBooking.endDate.replace("T", " ")}</p>
                   <p className="text-xs text-muted-foreground flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> {selectedBooking.pickupLocation} → {selectedBooking.dropoffLocation}</p>
                 </div>
               </div>
@@ -200,6 +224,11 @@ function BookingsPage() {
 
             <DialogFooter className="mt-4 gap-2 flex-col sm:flex-row">
               <Button variant="outline" onClick={() => setSelectedBooking(null)}>Close details</Button>
+              {selectedBooking.status === "completed" && !selectedBooking.isReviewed && (
+                <Button onClick={() => { setSelectedBooking(null); setReviewingBooking(selectedBooking); }}>
+                  Write a Review
+                </Button>
+              )}
               {selectedBooking.status === "confirmed" && (
                 <Button 
                   variant="destructive"
@@ -213,6 +242,65 @@ function BookingsPage() {
           </DialogContent>
         )}
       </Dialog>
+
+      {/* Review Dialog Modal */}
+      <Dialog open={reviewingBooking !== null} onOpenChange={(open) => !open && setReviewingBooking(null)}>
+        {reviewingBooking && (
+          <DialogContent className="max-w-md sm:rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="font-display text-xl font-bold">Write a Review</DialogTitle>
+              <DialogDescription>
+                Share your experience driving the {reviewingBooking.vehicleName}. Your review helps others make better choices!
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-4 space-y-4">
+              <div className="flex flex-col items-center justify-center gap-2 py-4">
+                <span className="text-sm font-medium text-muted-foreground">Tap stars to rate</span>
+                <div className="flex gap-1.5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setReviewRating(i + 1)}
+                      className="text-muted-foreground hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                      aria-label={`Rate ${i + 1} stars`}
+                    >
+                      <Star
+                        className={`h-8 w-8 transition-colors ${
+                          i < reviewRating ? "fill-warning text-warning" : "text-muted"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="review-comment">Review comment (optional)</Label>
+                <Textarea
+                  id="review-comment"
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  placeholder="What did you like or dislike about the car? How was the service?"
+                  rows={4}
+                  className="resize-none"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="mt-6 gap-2">
+              <Button variant="outline" onClick={() => setReviewingBooking(null)}>Cancel</Button>
+              <Button
+                disabled={submitReviewMutation.isPending}
+                onClick={() => submitReviewMutation.mutate()}
+              >
+                {submitReviewMutation.isPending ? "Submitting..." : "Submit Review"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
     </div>
   );
 }
@@ -221,12 +309,14 @@ function BookingRow({
   b, 
   onViewDetails, 
   onCancel, 
-  isCancelling 
+  isCancelling,
+  onWriteReview
 }: { 
   b: Booking; 
   onViewDetails: () => void; 
   onCancel: () => void; 
   isCancelling: boolean;
+  onWriteReview: () => void;
 }) {
   return (
     <Card className="grid gap-4 p-4 sm:grid-cols-[120px_1fr_auto] sm:items-center">
@@ -236,7 +326,7 @@ function BookingRow({
           <p className="font-display font-semibold">{b.vehicleName}</p>
           <Badge variant={b.status === "confirmed" ? "default" : b.status === "completed" ? "secondary" : "outline"} className="capitalize">{b.status}</Badge>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">{b.startDate} → {b.endDate}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{b.startDate.replace("T", " ")} → {b.endDate.replace("T", " ")}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">{b.pickupLocation} → {b.dropoffLocation}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">Ref #{b.id}</p>
       </div>
@@ -244,6 +334,9 @@ function BookingRow({
         <span className="font-display text-lg font-bold">${b.totalPrice}</span>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={onViewDetails}>Details</Button>
+          {b.status === "completed" && !b.isReviewed && (
+            <Button size="sm" onClick={onWriteReview}>Write Review</Button>
+          )}
           {b.status === "confirmed" && (
             <Button 
               size="sm" 

@@ -168,6 +168,28 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+-- ── Reviews ────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS `reviews` (
+  `id`          INT          NOT NULL AUTO_INCREMENT,
+  `rating`      INT          NOT NULL,
+  `comment`     TEXT         NULL,
+  `user_id`     INT          NOT NULL,
+  `vehicle_id`  INT          NOT NULL,
+  `booking_id`  VARCHAR(20)  NOT NULL,
+  `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `reviews_booking_id_unique` (`booking_id`),
+  KEY `reviews_user_id_idx` (`user_id`),
+  KEY `reviews_vehicle_id_idx` (`vehicle_id`),
+  CONSTRAINT `reviews_user_id_fk`
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `reviews_vehicle_id_fk`
+    FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `reviews_booking_id_fk`
+    FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================
 --  Done. Verify by running: SHOW TABLES;
 -- ============================================================

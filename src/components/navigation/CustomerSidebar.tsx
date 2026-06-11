@@ -34,7 +34,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
       </div>
       <nav className="space-y-1">
         {links.map((l) => {
-          const active = l.exact ? path === l.to : path.startsWith(l.to);
+          const active = "exact" in l ? path === l.to : path.startsWith(l.to);
           const Icon = l.icon;
           return (
             <Link

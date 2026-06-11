@@ -24,6 +24,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import type { Booking, BookingStatus } from "@/lib/types/booking.types";
+import { formatRentalDuration } from "@/utils/formatters";
 
 const STATUS_BADGE: Record<BookingStatus, string> = {
   pending: "bg-warning text-warning-foreground border-warning/30",
@@ -108,7 +109,7 @@ export function BookingDetailsDialog({ booking, open, onClose, onStatusChange, i
               <DetailItem
                 icon={<Clock className="h-4 w-4" />}
                 label="Duration"
-                value={`${booking.rentalDays} day${booking.rentalDays !== 1 ? "s" : ""}`}
+                value={formatRentalDuration(booking.rentalDays)}
               />
             )}
           </div>

@@ -11,7 +11,7 @@ export function generateAccessToken(userId: number, role: 'CUSTOMER' | 'ADMIN'):
   return jwt.sign(
     { userId, role } satisfies JwtPayload,
     env.JWT_ACCESS_SECRET,
-    { expiresIn: env.JWT_ACCESS_EXPIRES_IN },
+    { expiresIn: env.JWT_ACCESS_EXPIRES_IN as any },
   );
 }
 

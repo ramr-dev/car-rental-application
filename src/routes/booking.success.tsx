@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { paymentService } from "@/lib/api/payment.service";
 import { useAuth } from "@/store/auth";
 import { useBookingDraft } from "@/store/booking";
+import { formatRentalDuration } from "@/utils/formatters";
 import type { Booking } from "@/lib/types/booking.types";
 
 export const Route = createFileRoute("/booking/success")({
@@ -103,7 +104,7 @@ function BookingSuccessPage() {
     );
   }
 
-  const days = booking.rentalDays ?? 1;
+  const rentalHours = booking.rentalDays ?? 12; // rentalDays field now stores hours
 
   return (
     <PublicLayout>
@@ -142,7 +143,7 @@ function BookingSuccessPage() {
             <BookingInfoRow
               icon={<Calendar className="h-4 w-4" />}
               label="Trip dates"
-              value={`${booking.startDate} → ${booking.endDate} (${days} day${days !== 1 ? "s" : ""})`}
+              value={`${booking.startDate.replace("T", " ")} → ${booking.endDate.replace("T", " ")} (${formatRentalDuration(rentalHours)})`}
             />
             <BookingInfoRow
               icon={<MapPin className="h-4 w-4" />}
@@ -182,7 +183,7 @@ function BookingSuccessPage() {
               Price breakdown
             </p>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Rental ({days} day{days !== 1 ? "s" : ""})</span>
+              <span className="text-muted-foreground">Rental ({formatRentalDuration(rentalHours)})</span>
               <span>${booking.subtotal?.toLocaleString()}</span>
             </div>
             {booking.serviceFee != null && (
@@ -210,7 +211,7 @@ function BookingSuccessPage() {
 
         {/* ── What happens next ────────────────────────────────────────── */}
         <div className="mt-6 rounded-xl border border-success/30 bg-success/5 p-5 text-sm">
-          <p className="font-semibold text-success-foreground">What happens next?</p>
+          <p className="font-semibold text-card-foreground">What happens next?</p>
           <ol className="mt-2 space-y-1.5 text-muted-foreground list-none">
             <li>1. Your booking is confirmed — no further action needed.</li>
             <li>2. Show your driver's license and booking reference at pickup.</li>

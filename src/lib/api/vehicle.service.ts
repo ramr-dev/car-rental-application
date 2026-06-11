@@ -55,6 +55,24 @@ export const vehicleService = {
     }
   },
 
+  // Upload a vehicle image to the server; returns the public URL.
+  uploadImage: async (file: File): Promise<string> => {
+    const form = new FormData();
+    form.append("image", file);
+    const res = await api.post<{ url: string }>("/vehicles/upload-image", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data.url;
+  },
+
+  // Returns confirmed/active booking date ranges for a vehicle (used by the date picker).
+  getBookedRanges: async (id: string): Promise<{ startDate: string; endDate: string }[]> => {
+    const res = await api.get<{ ranges: { startDate: string; endDate: string }[] }>(
+      `/vehicles/${id}/booked-dates`,
+    );
+    return res.data.ranges;
+  },
+
   // Reviews are not yet implemented on the backend.
   reviews: async (_id: string): Promise<Review[]> => [],
 

@@ -52,8 +52,8 @@ export function VehicleCard({ vehicle, variant = "grid" }: { vehicle: Vehicle; v
           </div>
           <div className="mt-auto flex items-end justify-between pt-5">
             <div>
-              <span className="font-display text-2xl font-bold">${vehicle.pricePerDay}</span>
-              <span className="text-sm text-muted-foreground"> / day</span>
+              <span className="font-display text-2xl font-bold">${Math.round(vehicle.pricePerDay / 12)}</span>
+              <span className="text-sm text-muted-foreground"> / hr</span>
             </div>
             <Button asChild>
               <Link to="/booking/$id" params={{ id: vehicle.id }}>
@@ -107,8 +107,8 @@ export function VehicleCard({ vehicle, variant = "grid" }: { vehicle: Vehicle; v
 
         <div className="mt-5 flex items-end justify-between border-t border-border pt-4">
           <div>
-            <span className="font-display text-xl font-bold">${vehicle.pricePerDay}</span>
-            <span className="text-xs text-muted-foreground">/day</span>
+            <span className="font-display text-xl font-bold">${Math.round(vehicle.pricePerDay / 12)}</span>
+            <span className="text-xs text-muted-foreground">/hr</span>
           </div>
           <Button size="sm" asChild>
             <Link to="/booking/$id" params={{ id: vehicle.id }}>

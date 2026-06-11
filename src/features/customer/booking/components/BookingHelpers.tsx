@@ -20,15 +20,19 @@ export function PriceRow({
   label,
   amount,
   muted,
+  negative,
 }: {
   label: string;
   amount: number;
   muted?: boolean;
+  negative?: boolean;
 }) {
   return (
-    <div className={`flex justify-between ${muted ? "text-muted-foreground" : ""}`}>
+    <div className={`flex justify-between ${muted ? "text-muted-foreground" : negative ? "text-success" : ""}`}>
       <span>{label}</span>
-      <span className={muted ? "" : "font-medium"}>${amount.toLocaleString()}</span>
+      <span className={muted || negative ? "" : "font-medium"}>
+        {negative ? "-" : ""}${amount.toLocaleString()}
+      </span>
     </div>
   );
 }

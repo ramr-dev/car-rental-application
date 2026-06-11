@@ -12,3 +12,4 @@ export type { BookingListParams, BookingListResponse } from "./api/booking.servi
 export { userService } from "./api/user.service";
 export type { UserListParams, UserListResponse, KycListParams, KycListResponse, SubmitKycPayload } from "./api/user.service";
 export type { MyKycDocument } from "./types/user.types";
+export { reviewService } from "./api/review.service";

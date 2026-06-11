@@ -32,8 +32,11 @@ export const createBookingSchema = z.object({
   licenseCountry: z.string().min(2).max(100).trim(),
   notes:          z.string().max(1000).trim().optional(),
 }).refine(
-  (data) => new Date(data.endDate) > new Date(data.startDate),
-  { message: 'End date must be after start date', path: ['endDate'] },
+  (data) => {
+    const diffMs = new Date(data.endDate).getTime() - new Date(data.startDate).getTime();
+    return diffMs >= 6 * 3_600_000;
+  },
+  { message: 'Vehicle must be rented for at least 6 hours', path: ['endDate'] },
 ).refine(
   (data) => new Date(data.startDate) >= new Date(new Date().toDateString()),
   { message: 'Start date cannot be in the past', path: ['startDate'] },

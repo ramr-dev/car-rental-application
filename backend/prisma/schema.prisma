@@ -81,6 +81,7 @@ model User {
   bookings      Booking[]
   kycDocuments  KycDocument[]
   refreshTokens RefreshToken[]
+  reviews       Review[]
 
   @@map("users")
 }
@@ -112,6 +113,7 @@ model Vehicle {
   updatedAt    DateTime     @updatedAt        @map("updated_at")
 
   bookings     Booking[]
+  reviews      Review[]
 
   @@map("vehicles")
 }
@@ -147,6 +149,7 @@ model Booking {
 
   user    User    @relation(fields: [userId],    references: [id])
   vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+  review  Review?
 
   @@index([userId])
   @@index([vehicleId])
@@ -176,6 +179,35 @@ model KycDocument {
   @@map("kyc_documents")
 }
 
+model AdminNotification {
+  id        Int      @id @default(autoincrement())
+  type      String   @default("booking_paid") @db.VarChar(50)
+  title     String   @db.VarChar(255)
+  body      String   @db.Text
+  bookingId String?  @map("booking_id") @db.VarChar(30)
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("admin_notifications")
+}
+
+model Offer {
+  id              Int      @id @default(autoincrement())
+  title           String   @db.VarChar(120)
+  description     String   @default("") @db.VarChar(500)
+  discountPercent Decimal  @db.Decimal(5, 2) @map("discount_percent")
+  minDays         Int      @map("min_days")
+  maxDays         Int?     @map("max_days")
+  isActive        Boolean  @default(true)    @map("is_active")
+  badgeColor      String   @default("primary") @db.VarChar(50) @map("badge_color")
+  createdAt       DateTime @default(now())   @map("created_at")
+  updatedAt       DateTime @updatedAt        @map("updated_at")
+
+  @@map("offers")
+}
+
 model RefreshToken {
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
@@ -187,4 +219,22 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  rating    Int
+  comment   String?  @db.Text
+  userId    Int      @map("user_id")
+  vehicleId Int      @map("vehicle_id")
+  bookingId String   @unique @map("booking_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId],    references: [id], onDelete: Cascade)
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([vehicleId])
+  @@map("reviews")
 }

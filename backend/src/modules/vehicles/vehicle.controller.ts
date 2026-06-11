@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import * as vehicleService from './vehicle.service.js';
+import { env } from '../../config/env.js';
 import type {
   VehicleListQuery,
   VehicleIdParam,
@@ -41,4 +42,26 @@ export async function remove(req: Request, res: Response): Promise<void> {
   const { id } = req.params as unknown as VehicleIdParam;
   await vehicleService.remove(id);
   res.status(204).send();
+}
+
+// GET /api/vehicles/:id/booked-dates
+export async function getBookedRanges(req: Request, res: Response): Promise<void> {
+  const { id } = req.params as unknown as VehicleIdParam;
+  const ranges = await vehicleService.getBookedRanges(id);
+  res.json({ ranges });
+}
+
+// POST /api/vehicles/upload-image
+export async function uploadImage(req: Request, res: Response): Promise<void> {
+  const file = req.file;
+  if (!file) {
+    res.status(400).json({ error: 'No image file provided.' });
+    return;
+  }
+  // Build the public URL using the server's base origin
+  const baseUrl = env.CORS_ORIGIN.replace(/\/$/, '');
+  // Static files are served from port 3001 (the backend), not the frontend origin
+  const backendBase = `http://localhost:${process.env.PORT ?? 3001}`;
+  const url = `${backendBase}/uploads/vehicles/${file.filename}`;
+  res.status(201).json({ url });
 }

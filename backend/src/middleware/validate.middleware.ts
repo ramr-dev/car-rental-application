@@ -31,7 +31,7 @@ export function validate(schema: ZodSchema, target: Target = 'body') {
     console.log("check validation" , result.data);
 
     // Replace raw input with validated + coerced output
-    (req as Record<string, unknown>)[target] = result.data;
+    (req as any)[target] = result.data;
     next();
   };
 }
