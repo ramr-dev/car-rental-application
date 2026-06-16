@@ -19,12 +19,12 @@ async function main() {
     console.log(`\n${signal} received — shutting down gracefully...`);
     server.close(async () => {
       await prisma.$disconnect();
-      console.log('✅  Server closed. Bye.');
+      console.log('Server closed. Bye.');
       process.exit(0);
     });
     // Force exit if server hasn't closed within 10 s
     setTimeout(() => {
-      console.error('⚠️  Forced exit after timeout');
+      console.error('Forced exit after timeout');
       process.exit(1);
     }, 10_000);
   };
@@ -39,6 +39,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('❌  Failed to start server:', err);
+  console.error('Failed to start server:', err);
   process.exit(1);
 });

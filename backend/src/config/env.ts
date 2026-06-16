@@ -22,6 +22,11 @@ const envSchema = z.object({
   BCRYPT_ROUNDS: z.coerce.number().default(10),
 
   STRIPE_SECRET_KEY: z.string().min(1, 'STRIPE_SECRET_KEY is required'),
+
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_PHONE_NUMBER: z.string().optional(),
+  TWILIO_ENABLED: z.preprocess((val) => val === 'true' || val === true || val === '1', z.boolean()).default(false),
 });
 
 const parsed = envSchema.safeParse(process.env);

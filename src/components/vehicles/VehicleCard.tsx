@@ -112,7 +112,7 @@ export function VehicleCard({ vehicle, variant = "grid" }: { vehicle: Vehicle; v
           </div>
           <Button size="sm" asChild>
             <Link to="/booking/$id" params={{ id: vehicle.id }}>
-              Details
+              Book Now
             </Link>
           </Button>
         </div>

@@ -8,6 +8,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
+import { ChatWidget } from "@/components/common/ChatWidget";
 
 import appCss from "../styles.css?url";
 
@@ -115,6 +116,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <Outlet />
       <Toaster position="top-right" />
+      <ChatWidget />
     </QueryClientProvider>
   );
 }

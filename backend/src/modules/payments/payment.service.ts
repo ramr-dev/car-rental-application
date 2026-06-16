@@ -6,6 +6,7 @@ import { AppError } from '../../middleware/error.middleware.js';
 import { getActiveForPricing, bestDiscount } from '../offers/offer.service.js';
 import { createBookingPaidNotification } from '../notifications/notification.service.js';
 import type { CreateCheckoutInput, CreateIntentInput, VerifyIntentInput } from './payment.schema.js';
+import { twilioService } from '../../services/twilio.service.js';
 
 // ─── Stripe client ─────────────────────────────────────────────────────────
 
@@ -324,6 +325,19 @@ export async function verifyAndCreate(sessionId: string, userId: number) {
     pricing.totalPrice,
   ).catch(() => {});
 
+  // Send Twilio SMS confirmation gracefully
+  if (booking.customerPhone) {
+    twilioService.sendBookingConfirmationSMS({
+      customerName: booking.customerName || 'Customer',
+      bookingId: booking.id,
+      vehicleName: booking.vehicle.name,
+      startDate: booking.startDate,
+      endDate: booking.endDate,
+    }, booking.customerPhone).catch(err => {
+      console.error(`❌ SMS confirmation failed for booking ${booking.id}:`, err);
+    });
+  }
+
   return toBookingResponse(booking);
 }
 
@@ -492,6 +506,19 @@ export async function verifyAndCreateFromIntent(
     booking.vehicle.name,
     pricing.totalPrice,
   ).catch(() => {});
+
+  // Send Twilio SMS confirmation gracefully
+  if (booking.customerPhone) {
+    twilioService.sendBookingConfirmationSMS({
+      customerName: booking.customerName || 'Customer',
+      bookingId: booking.id,
+      vehicleName: booking.vehicle.name,
+      startDate: booking.startDate,
+      endDate: booking.endDate,
+    }, booking.customerPhone).catch(err => {
+      console.error(`❌ SMS confirmation failed for booking ${booking.id}:`, err);
+    });
+  }
 
   return toBookingResponse(booking);
 }

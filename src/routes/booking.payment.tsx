@@ -47,81 +47,81 @@ const stripePromise = loadStripe(
 function getStripeAppearance(isDark: boolean): StripeElementsOptions["appearance"] {
   return isDark
     ? {
-        theme: "night",
-        variables: {
-          colorPrimary: "#7c6ef7",
-          colorBackground: "#1c2133",
-          colorText: "#f0f2f8",
-          colorDanger: "#f87171",
-          colorTextSecondary: "#a0a6be",
-          colorTextPlaceholder: "#616880",
-          colorIconTab: "#a0a6be",
-          colorIconTabSelected: "#7c6ef7",
-          fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
-          borderRadius: "10px",
-          spacingUnit: "4px",
+      theme: "night",
+      variables: {
+        colorPrimary: "#7c6ef7",
+        colorBackground: "#1c2133",
+        colorText: "#f0f2f8",
+        colorDanger: "#f87171",
+        colorTextSecondary: "#a0a6be",
+        colorTextPlaceholder: "#616880",
+        colorIconTab: "#a0a6be",
+        colorIconTabSelected: "#7c6ef7",
+        fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+        borderRadius: "10px",
+        spacingUnit: "4px",
+      },
+      rules: {
+        ".Input": {
+          backgroundColor: "#252844",
+          border: "1px solid rgba(255,255,255,0.10)",
+          color: "#f0f2f8",
+          boxShadow: "none",
         },
-        rules: {
-          ".Input": {
-            backgroundColor: "#252844",
-            border: "1px solid rgba(255,255,255,0.10)",
-            color: "#f0f2f8",
-            boxShadow: "none",
-          },
-          ".Input:focus": {
-            border: "1px solid #7c6ef7",
-            boxShadow: "0 0 0 2px rgba(124,110,247,0.25)",
-          },
-          ".Label": {
-            color: "#a0a6be",
-            fontSize: "13px",
-          },
-          ".Tab": {
-            backgroundColor: "#252844",
-            border: "1px solid rgba(255,255,255,0.08)",
-            color: "#a0a6be",
-          },
-          ".Tab:hover": {
-            backgroundColor: "#2e3356",
-            color: "#f0f2f8",
-          },
-          ".Tab--selected": {
-            backgroundColor: "#2e3356",
-            border: "1px solid #7c6ef7",
-            color: "#f0f2f8",
-          },
-          ".Block": {
-            backgroundColor: "#252844",
-            border: "1px solid rgba(255,255,255,0.08)",
-          },
-          ".Error": {
-            color: "#f87171",
-          },
+        ".Input:focus": {
+          border: "1px solid #7c6ef7",
+          boxShadow: "0 0 0 2px rgba(124,110,247,0.25)",
         },
-      }
+        ".Label": {
+          color: "#a0a6be",
+          fontSize: "13px",
+        },
+        ".Tab": {
+          backgroundColor: "#252844",
+          border: "1px solid rgba(255,255,255,0.08)",
+          color: "#a0a6be",
+        },
+        ".Tab:hover": {
+          backgroundColor: "#2e3356",
+          color: "#f0f2f8",
+        },
+        ".Tab--selected": {
+          backgroundColor: "#2e3356",
+          border: "1px solid #7c6ef7",
+          color: "#f0f2f8",
+        },
+        ".Block": {
+          backgroundColor: "#252844",
+          border: "1px solid rgba(255,255,255,0.08)",
+        },
+        ".Error": {
+          color: "#f87171",
+        },
+      },
+    }
     : {
-        theme: "stripe",
-        variables: {
-          colorPrimary: "#5c4be8",
-          colorBackground: "#ffffff",
-          colorText: "#1a1a2e",
-          colorDanger: "#e05c5c",
-          colorTextSecondary: "#6b7280",
-          fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
-          borderRadius: "10px",
-          spacingUnit: "4px",
+      theme: "stripe",
+      variables: {
+        colorPrimary: "#5c4be8",
+        colorBackground: "#ffffff",
+        colorText: "#1a1a2e",
+        colorDanger: "#e05c5c",
+        colorTextSecondary: "#6b7280",
+        fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+        borderRadius: "10px",
+        spacingUnit: "4px",
+      },
+      rules: {
+        ".Input": {
+          border: "1px solid #e8ebf0",
+          boxShadow: "none",
         },
-        rules: {
-          ".Input": {
-            border: "1px solid #e8ebf0",
-            boxShadow: "none",
-          },
-          ".Input:focus": {
-            border: "1px solid #5c4be8",
-            boxShadow: "0 0 0 2px rgba(92,75,232,0.15)",
-          },
+        ".Input:focus": {
+          border: "1px solid #5c4be8",
+          boxShadow: "0 0 0 2px rgba(92,75,232,0.15)",
         },
-      };
+      },
+    };
 }
 
 // ─── Page wrapper — fetches clientSecret and mounts Elements ──────────────
@@ -169,18 +169,18 @@ function BookingPaymentPage() {
     setIntentError(null);
     try {
       const { clientSecret: cs } = await paymentService.createIntent({
-        vehicleId:       Number(vehicle.id),
-        startDate:       draft.startDate,
-        endDate:         draft.endDate,
-        pickupLocation:  draft.pickupLocation,
+        vehicleId: Number(vehicle.id),
+        startDate: draft.startDate,
+        endDate: draft.endDate,
+        pickupLocation: draft.pickupLocation,
         dropoffLocation: draft.dropoffLocation || draft.pickupLocation,
-        customerName:    draft.fullName ?? "",
-        customerEmail:   draft.email ?? "",
-        customerPhone:   draft.phone ?? "",
-        licenseNumber:   draft.licenseNumber ?? "",
-        licenseExpiry:   draft.licenseExpiry ?? "",
-        licenseCountry:  draft.licenseCountry ?? "",
-        notes:           draft.notes,
+        customerName: draft.fullName ?? "",
+        customerEmail: draft.email ?? "",
+        customerPhone: draft.phone ?? "",
+        licenseNumber: draft.licenseNumber ?? "",
+        licenseExpiry: draft.licenseExpiry ?? "",
+        licenseCountry: draft.licenseCountry ?? "",
+        notes: draft.notes,
       });
       setClientSecret(cs);
     } catch (err: any) {
