@@ -19,11 +19,12 @@ export const Route = createFileRoute("/booking/success")({
   validateSearch: (search: Record<string, unknown>) => ({
     session_id:     (search.session_id as string)     ?? "",
     payment_intent: (search.payment_intent as string) ?? "",
+    razorpay:       (search.razorpay as string)        ?? "",
   }),
 });
 
 function BookingSuccessPage() {
-  const { session_id: sessionId, payment_intent: paymentIntentId } = Route.useSearch();
+  const { session_id: sessionId, payment_intent: paymentIntentId, razorpay: isRazorpay } = Route.useSearch();
   const { user } = useAuth();
   const { resetTrip } = useBookingDraft();
   const navigate = useNavigate();
@@ -42,6 +43,27 @@ function BookingSuccessPage() {
     if (!hydrated) return;
 
     if (!user) { navigate({ to: "/login" }); return; }
+
+    // ── Razorpay flow: booking already verified on payment page ──────────────
+    // Just fetch the user's most recent confirmed booking to display.
+    if (isRazorpay === '1') {
+      if (verifiedRef.current) return;
+      verifiedRef.current = true;
+      import('@/lib/api/client').then(({ api }) =>
+        api.get<{ data: Booking[] }>('/bookings?limit=1&status=CONFIRMED')
+          .then((res) => {
+            const latest = (res.data as any)?.data?.[0] ?? null;
+            setBooking(latest);
+            resetTrip();
+            setLoading(false);
+          })
+          .catch(() => {
+            // Show generic success even without booking details
+            setLoading(false);
+          })
+      );
+      return;
+    }
 
     if (!sessionId && !paymentIntentId) {
       setError("No payment session found. Please try booking again.");
@@ -67,7 +89,7 @@ function BookingSuccessPage() {
         setError(msg);
         setLoading(false);
       });
-  }, [hydrated, sessionId, paymentIntentId, user, navigate, resetTrip]);
+  }, [hydrated, sessionId, paymentIntentId, isRazorpay, user, navigate, resetTrip]);
 
   if (!hydrated || loading) {
     return (

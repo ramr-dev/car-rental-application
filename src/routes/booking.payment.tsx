@@ -17,6 +17,9 @@ import {
   ShieldCheck,
   Loader2,
   AlertCircle,
+  Wallet,
+  Smartphone,
+  Building2,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -24,9 +27,15 @@ import { PublicLayout } from "@/layouts/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { vehicleService } from "@/lib/api/vehicle.service";
 import { paymentService } from "@/lib/api/payment.service";
 import { offerService } from "@/lib/api/offer.service";
+import {
+  razorpayService,
+  loadRazorpayScript,
+  openRazorpayCheckout,
+} from "@/lib/api/razorpay.service";
 import { useBookingDraft } from "@/store/booking";
 import { useAuth } from "@/store/auth";
 import { useTheme } from "@/store/theme";
@@ -72,19 +81,13 @@ function getStripeAppearance(isDark: boolean): StripeElementsOptions["appearance
           border: "1px solid #7c6ef7",
           boxShadow: "0 0 0 2px rgba(124,110,247,0.25)",
         },
-        ".Label": {
-          color: "#a0a6be",
-          fontSize: "13px",
-        },
+        ".Label": { color: "#a0a6be", fontSize: "13px" },
         ".Tab": {
           backgroundColor: "#252844",
           border: "1px solid rgba(255,255,255,0.08)",
           color: "#a0a6be",
         },
-        ".Tab:hover": {
-          backgroundColor: "#2e3356",
-          color: "#f0f2f8",
-        },
+        ".Tab:hover": { backgroundColor: "#2e3356", color: "#f0f2f8" },
         ".Tab--selected": {
           backgroundColor: "#2e3356",
           border: "1px solid #7c6ef7",
@@ -94,9 +97,7 @@ function getStripeAppearance(isDark: boolean): StripeElementsOptions["appearance
           backgroundColor: "#252844",
           border: "1px solid rgba(255,255,255,0.08)",
         },
-        ".Error": {
-          color: "#f87171",
-        },
+        ".Error": { color: "#f87171" },
       },
     }
     : {
@@ -112,10 +113,7 @@ function getStripeAppearance(isDark: boolean): StripeElementsOptions["appearance
         spacingUnit: "4px",
       },
       rules: {
-        ".Input": {
-          border: "1px solid #e8ebf0",
-          boxShadow: "none",
-        },
+        ".Input": { border: "1px solid #e8ebf0", boxShadow: "none" },
         ".Input:focus": {
           border: "1px solid #5c4be8",
           boxShadow: "0 0 0 2px rgba(92,75,232,0.15)",
@@ -124,7 +122,7 @@ function getStripeAppearance(isDark: boolean): StripeElementsOptions["appearance
     };
 }
 
-// ─── Page wrapper — fetches clientSecret and mounts Elements ──────────────
+// ─── Date/time formatter ──────────────────────────────────────────────────
 
 function fmtDT(dt: string | undefined): string {
   if (!dt) return "—";
@@ -137,6 +135,209 @@ function fmtDT(dt: string | undefined): string {
   const h12 = h % 12 || 12;
   return `${datePart} ${h12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
+
+// ─── Gateway indicator badge ──────────────────────────────────────────────
+
+function GatewayBadge({ gateway }: { gateway: 'stripe' | 'razorpay' | null }) {
+  if (gateway === 'razorpay') {
+    return (
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-5 py-3 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <Smartphone className="h-3.5 w-3.5 text-green-500" /> UPI (GPay, PhonePe, Paytm)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <CreditCard className="h-3.5 w-3.5 text-green-500" /> All Debit / Credit Cards
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Building2 className="h-3.5 w-3.5 text-green-500" /> Net Banking
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Wallet className="h-3.5 w-3.5 text-green-500" /> Wallets
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Lock className="h-3.5 w-3.5 text-green-500" /> Secured by Razorpay
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-muted/30 px-5 py-3 text-xs text-muted-foreground">
+      <span className="flex items-center gap-1.5">
+        <Lock className="h-3.5 w-3.5 text-success" /> 256-bit SSL
+      </span>
+      <span className="flex items-center gap-1.5">
+        <ShieldCheck className="h-3.5 w-3.5 text-success" /> Powered by Stripe
+      </span>
+      <span className="flex items-center gap-1.5">
+        <CreditCard className="h-3.5 w-3.5 text-success" /> No card data stored
+      </span>
+    </div>
+  );
+}
+
+// ─── Razorpay checkout form ───────────────────────────────────────────────
+
+function RazorpayCheckoutForm({
+  totalAmount,
+  draft,
+  vehicle,
+  isDark,
+}: {
+  totalAmount: number;
+  draft: any;
+  vehicle: any;
+  isDark: boolean;
+}) {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleRazorpayPay = async () => {
+    setIsProcessing(true);
+    setErrorMessage(null);
+
+    // 1. Load script
+    const loaded = await loadRazorpayScript();
+    if (!loaded) {
+      setErrorMessage("Failed to load payment system. Please check your connection and try again.");
+      setIsProcessing(false);
+      return;
+    }
+
+    // 2. Create order on backend
+    let orderData: any;
+    try {
+      orderData = await razorpayService.createOrder({
+        vehicleId:       Number(vehicle.id),
+        startDate:       draft.startDate,
+        endDate:         draft.endDate,
+        pickupLocation:  draft.pickupLocation,
+        dropoffLocation: draft.dropoffLocation || draft.pickupLocation,
+        customerName:    draft.fullName ?? "",
+        customerEmail:   draft.email ?? "",
+        customerPhone:   draft.phone ?? "",
+        licenseNumber:   draft.licenseNumber ?? "",
+        licenseExpiry:   draft.licenseExpiry ?? "",
+        licenseCountry:  draft.licenseCountry ?? "",
+        notes:           draft.notes,
+      });
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? "Failed to create payment order. Please try again.";
+      setErrorMessage(msg);
+      toast.error(msg);
+      setIsProcessing(false);
+      return;
+    }
+
+    // 3. Open Razorpay popup
+    openRazorpayCheckout({
+      orderId:       orderData.orderId,
+      amount:        orderData.amount,
+      currency:      orderData.currency,
+      keyId:         orderData.keyId,
+      vehicleName:   orderData.vehicleName,
+      vehicleImage:  orderData.vehicleImage,
+      customerName:  draft.fullName ?? "",
+      customerEmail: draft.email ?? "",
+      customerPhone: draft.phone ?? "",
+      isDark,
+      onDismiss: () => {
+        setIsProcessing(false);
+        toast.info("Payment cancelled.");
+      },
+      onSuccess: async (response) => {
+        try {
+          await razorpayService.verify({
+            razorpay_order_id:   response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature:  response.razorpay_signature,
+          });
+          toast.success("Payment successful! Booking confirmed.");
+          // Navigate to success page — use href to bypass TanStack Router param validation
+          // since Razorpay flow does not use session_id query param
+          window.location.href = "/booking/success?razorpay=1";
+        } catch (err: any) {
+          const msg = err?.response?.data?.error ?? "Payment succeeded but booking creation failed. Please contact support.";
+          setErrorMessage(msg);
+          toast.error(msg);
+          setIsProcessing(false);
+        }
+      },
+    });
+  };
+
+  return (
+    <Card className="p-6 lg:p-8 space-y-6">
+      <div>
+        <h2 className="font-display text-xl font-semibold flex items-center gap-2">
+          <Wallet className="h-5 w-5 text-primary" />
+          Payment Details
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Pay securely via UPI, cards, net banking, or wallets — powered by Razorpay.
+        </p>
+      </div>
+
+      {/* Razorpay payment methods visual */}
+      <div className="rounded-xl border border-border bg-muted/20 p-5 space-y-4">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Accepted Payment Methods</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { icon: Smartphone, label: "UPI", sub: "GPay, PhonePe, Paytm" },
+            { icon: CreditCard, label: "Cards", sub: "Visa, Master, RuPay" },
+            { icon: Building2,  label: "Net Banking", sub: "100+ banks" },
+            { icon: Wallet,     label: "Wallets", sub: "Paytm, Mobikwik" },
+          ].map(({ icon: Icon, label, sub }) => (
+            <div
+              key={label}
+              className="flex flex-col items-center gap-1.5 rounded-lg border border-border bg-background p-3 text-center transition-colors hover:border-primary/40 hover:bg-primary/5"
+            >
+              <Icon className="h-5 w-5 text-primary" />
+              <span className="text-xs font-semibold">{label}</span>
+              <span className="text-[10px] text-muted-foreground leading-tight">{sub}</span>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-xs text-muted-foreground text-center">
+          Clicking "Pay Now" opens the Razorpay secure checkout popup.
+        </p>
+      </div>
+
+      {errorMessage && (
+        <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>{errorMessage}</p>
+        </div>
+      )}
+
+      <Button
+        id="razorpay-pay-btn"
+        size="lg"
+        className="w-full shadow-glow"
+        onClick={handleRazorpayPay}
+        disabled={isProcessing}
+      >
+        {isProcessing ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Opening Razorpay…
+          </>
+        ) : (
+          <>
+            <Lock className="mr-2 h-4 w-4" />
+            Pay ₹{Math.round(totalAmount * 83).toLocaleString("en-IN")} (${totalAmount.toFixed(2)}) securely
+          </>
+        )}
+      </Button>
+
+      <p className="text-center text-xs text-muted-foreground">
+        By completing this payment you agree to our rental terms and cancellation policy.
+      </p>
+    </Card>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────
 
 function BookingPaymentPage() {
   const { draft } = useBookingDraft();
@@ -159,6 +360,18 @@ function BookingPaymentPage() {
     staleTime: 5 * 60_000,
   });
 
+  // Detect active gateway
+  const { data: activeGateway, isLoading: gatewayLoading } = useQuery({
+    queryKey: ["active-gateway"],
+    queryFn: paymentService.getActiveGateway,
+    staleTime: 30_000,
+    retry: 1,
+    // Default to stripe if the call fails (e.g., not logged in as admin)
+  });
+
+  const gateway = activeGateway ?? "stripe";
+
+  // Stripe state
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [intentError, setIntentError] = useState<string | null>(null);
   const [intentLoading, setIntentLoading] = useState(false);
@@ -169,18 +382,18 @@ function BookingPaymentPage() {
     setIntentError(null);
     try {
       const { clientSecret: cs } = await paymentService.createIntent({
-        vehicleId: Number(vehicle.id),
-        startDate: draft.startDate,
-        endDate: draft.endDate,
-        pickupLocation: draft.pickupLocation,
+        vehicleId:       Number(vehicle.id),
+        startDate:       draft.startDate,
+        endDate:         draft.endDate,
+        pickupLocation:  draft.pickupLocation,
         dropoffLocation: draft.dropoffLocation || draft.pickupLocation,
-        customerName: draft.fullName ?? "",
-        customerEmail: draft.email ?? "",
-        customerPhone: draft.phone ?? "",
-        licenseNumber: draft.licenseNumber ?? "",
-        licenseExpiry: draft.licenseExpiry ?? "",
-        licenseCountry: draft.licenseCountry ?? "",
-        notes: draft.notes,
+        customerName:    draft.fullName ?? "",
+        customerEmail:   draft.email ?? "",
+        customerPhone:   draft.phone ?? "",
+        licenseNumber:   draft.licenseNumber ?? "",
+        licenseExpiry:   draft.licenseExpiry ?? "",
+        licenseCountry:  draft.licenseCountry ?? "",
+        notes:           draft.notes,
       });
       setClientSecret(cs);
     } catch (err: any) {
@@ -197,11 +410,12 @@ function BookingPaymentPage() {
     if (!vehicleId || !draft.startDate) { window.location.href = "/vehicles"; return; }
   }, [user, vehicleId, draft.startDate, navigate]);
 
+  // Only create Stripe intent if Stripe is the active gateway
   useEffect(() => {
-    if (vehicle && !clientSecret && !intentLoading && !intentError) {
+    if (gateway === "stripe" && vehicle && !clientSecret && !intentLoading && !intentError) {
       createIntent();
     }
-  }, [vehicle, clientSecret, intentLoading, intentError, createIntent]);
+  }, [gateway, vehicle, clientSecret, intentLoading, intentError, createIntent]);
 
   if (!vehicleId || !draft.startDate) return null;
 
@@ -213,6 +427,8 @@ function BookingPaymentPage() {
   const pricing = vehicle
     ? calcBookingTotal(vehicle.pricePerDay, rentalHours, 0, SERVICE_FEE_RATE, TAX_RATE, SECURITY_DEPOSIT, activeOffers)
     : null;
+
+  const isLoading = vehicleLoading || gatewayLoading || (gateway === "stripe" && intentLoading);
 
   return (
     <PublicLayout>
@@ -231,21 +447,46 @@ function BookingPaymentPage() {
 
           {/* ── Left: Payment form ──────────────────────────────────────── */}
           <div className="space-y-6">
-            <div>
-              <h1 className="font-display text-3xl font-bold">Complete Payment</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Your payment is processed securely via Stripe.
-              </p>
+            <div className="flex items-start justify-between flex-wrap gap-3">
+              <div>
+                <h1 className="font-display text-3xl font-bold">Complete Payment</h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Your payment is processed securely via{" "}
+                  <span className="font-medium text-foreground">
+                    {gateway === "razorpay" ? "Razorpay" : "Stripe"}
+                  </span>.
+                </p>
+              </div>
+              <Badge
+                variant="outline"
+                className={
+                  gateway === "razorpay"
+                    ? "border-blue-500/40 bg-blue-500/10 text-blue-500"
+                    : "border-primary/40 bg-primary/10 text-primary"
+                }
+              >
+                {gateway === "razorpay" ? "🇮🇳 UPI + Cards" : "💳 International Cards"}
+              </Badge>
             </div>
 
-            {vehicleLoading || intentLoading ? (
+            {/* Loading state */}
+            {isLoading ? (
               <Card className="flex min-h-[320px] items-center justify-center p-8">
                 <div className="text-center">
                   <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                   <p className="mt-3 text-sm text-muted-foreground">Setting up secure payment…</p>
                 </div>
               </Card>
+            ) : gateway === "razorpay" ? (
+              /* ── Razorpay form ─────────────────────────────────────── */
+              <RazorpayCheckoutForm
+                totalAmount={pricing?.total ?? 0}
+                draft={draft}
+                vehicle={vehicle}
+                isDark={isDark}
+              />
             ) : intentError ? (
+              /* ── Stripe error state ────────────────────────────────── */
               <Card className="p-8 text-center space-y-4">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 text-destructive">
                   <AlertCircle className="h-7 w-7" />
@@ -255,9 +496,7 @@ function BookingPaymentPage() {
                   <p className="mt-1 text-sm text-muted-foreground">{intentError}</p>
                 </div>
                 <div className="flex flex-wrap justify-center gap-3">
-                  <Button onClick={createIntent}>
-                    Try again
-                  </Button>
+                  <Button onClick={createIntent}>Try again</Button>
                   <Button variant="outline" asChild>
                     <Link to="/booking/$id" params={{ id: vehicleId }}>
                       <ArrowLeft className="mr-2 h-4 w-4" /> Back to booking
@@ -266,29 +505,17 @@ function BookingPaymentPage() {
                 </div>
               </Card>
             ) : clientSecret ? (
+              /* ── Stripe Elements form ──────────────────────────────── */
               <Elements
                 stripe={stripePromise}
-                options={{
-                  clientSecret,
-                  appearance: getStripeAppearance(isDark),
-                }}
+                options={{ clientSecret, appearance: getStripeAppearance(isDark) }}
               >
                 <CheckoutForm totalAmount={pricing?.total ?? 0} />
               </Elements>
             ) : null}
 
             {/* Security badges */}
-            <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-muted/30 px-5 py-3 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <Lock className="h-3.5 w-3.5 text-success" /> 256-bit SSL
-              </span>
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 text-success" /> Powered by Stripe
-              </span>
-              <span className="flex items-center gap-1.5">
-                <CreditCard className="h-3.5 w-3.5 text-success" /> No card data stored
-              </span>
-            </div>
+            <GatewayBadge gateway={gateway} />
           </div>
 
           {/* ── Right: Order summary ────────────────────────────────────── */}
@@ -396,6 +623,12 @@ function BookingPaymentPage() {
                             <span>Total charged now</span>
                             <span className="text-primary">${pricing.total}</span>
                           </div>
+                          {gateway === "razorpay" && (
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>Approx. in INR</span>
+                              <span>≈ ₹{Math.round(pricing.total * 83).toLocaleString("en-IN")}</span>
+                            </div>
+                          )}
                           <p className="text-xs text-muted-foreground">
                             + $500 refundable deposit at pickup
                           </p>
@@ -414,7 +647,7 @@ function BookingPaymentPage() {
   );
 }
 
-// ─── Inner form — lives inside Elements context ───────────────────────────
+// ─── Stripe inner form ────────────────────────────────────────────────────
 
 function CheckoutForm({ totalAmount }: { totalAmount: number }) {
   const stripe = useStripe();
@@ -436,7 +669,6 @@ function CheckoutForm({ totalAmount }: { totalAmount: number }) {
       },
     });
 
-    // Only reaches here on immediate error — success redirects automatically
     if (error) {
       const msg =
         error.type === "card_error" || error.type === "validation_error"
@@ -473,6 +705,7 @@ function CheckoutForm({ totalAmount }: { totalAmount: number }) {
         )}
 
         <Button
+          id="stripe-pay-btn"
           type="submit"
           size="lg"
           className="w-full shadow-glow"

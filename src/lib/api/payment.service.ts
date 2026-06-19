@@ -41,4 +41,10 @@ export const paymentService = {
     const res = await api.post<Booking>("/payments/confirm-intent", { paymentIntentId });
     return res.data;
   },
+
+  // Get the currently active payment gateway from admin config.
+  getActiveGateway: async (): Promise<'stripe' | 'razorpay'> => {
+    const res = await api.get<{ gateway: 'stripe' | 'razorpay' }>("/payments/gateway");
+    return res.data.gateway;
+  },
 };
