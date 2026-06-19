@@ -42,6 +42,10 @@ function toVehicleResponse(v: PrismaVehicle) {
       topSpeed:     v.topSpeed,
       acceleration: v.acceleration,
     },
+    // GPS Fields
+    latitude:     v.latitude ? Number(v.latitude) : null,
+    longitude:    v.longitude ? Number(v.longitude) : null,
+    gpsLastSeen:  v.gpsLastSeen?.toISOString() ?? null,
   };
 }
 

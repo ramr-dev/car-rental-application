@@ -17,6 +17,7 @@ import { adminRouter } from './modules/admin/admin.routes.js';
 import { paymentRouter } from './modules/payments/payment.routes.js';
 import { offerRouter } from './modules/offers/offer.routes.js';
 import { reviewRouter } from './modules/reviews/reviews.routes.js';
+import { gpsRouter } from './modules/gps/gps.routes.js';
 
 // ─── App factory ──────────────────────────────────────────────────────────
 // Returns a configured Express application.
@@ -89,6 +90,7 @@ export function createApp() {
   app.use('/api/payments', paymentRouter);
   app.use('/api/offers',   offerRouter);
   app.use('/api/reviews',  reviewRouter);
+  app.use('/api/gps',      gpsRouter);
 
   // ── 404 handler ──────────────────────────────────────────────────────────
   app.use((_req, res) => {

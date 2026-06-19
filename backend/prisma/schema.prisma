@@ -112,6 +112,11 @@ model Vehicle {
   createdAt    DateTime     @default(now())   @map("created_at")
   updatedAt    DateTime     @updatedAt        @map("updated_at")
 
+  // ── GPS tracking fields ───────────────────────────────────────
+  latitude    Decimal?  @db.Decimal(10, 7)
+  longitude   Decimal?  @db.Decimal(10, 7)
+  gpsLastSeen DateTime? @map("gps_last_seen")
+
   bookings     Booking[]
   reviews      Review[]
 
