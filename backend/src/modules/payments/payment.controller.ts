@@ -29,3 +29,14 @@ export async function confirmIntent(req: Request, res: Response): Promise<void> 
   const booking = await paymentService.verifyAndCreateFromIntent(input, req.user!.userId);
   res.status(201).json(booking);
 }
+
+// GET /api/payments/gateway  — PUBLIC (no auth required)
+// Returns the currently active payment gateway so the checkout page
+// can decide whether to render Stripe or Razorpay.
+export async function getActiveGateway(_req: Request, res: Response): Promise<void> {
+  const { prisma } = await import('../../lib/prisma.js');
+  const row = await prisma.appConfig.findUnique({
+    where: { key: 'active_payment_gateway' },
+  });
+  res.json({ gateway: row?.value ?? 'stripe' });
+}

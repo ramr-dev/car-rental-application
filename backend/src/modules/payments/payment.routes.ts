@@ -42,3 +42,11 @@ paymentRouter.post(
   validate(verifyIntentSchema),
   asyncHandler(controller.confirmIntent),
 );
+
+// ── GET /api/payments/gateway ──────────────────────────────────────────────
+// Returns the active payment gateway (stripe or razorpay).
+paymentRouter.get(
+  '/gateway',
+  asyncHandler(controller.getActiveGateway),
+);
+

@@ -47,3 +47,26 @@ export async function reviewKyc(req: Request, res: Response): Promise<void> {
   const doc     = await adminService.reviewKyc(id, req.user!.userId, input);
   res.json(doc);
 }
+
+// ── GET /api/admin/config/gateway ─────────────────────────────────────────
+export async function getGateway(_req: Request, res: Response): Promise<void> {
+  const row = await (await import('../../lib/prisma.js')).prisma.appConfig.findUnique({
+    where: { key: 'active_payment_gateway' },
+  });
+  res.json({ gateway: row?.value ?? 'stripe' });
+}
+
+// ── PATCH /api/admin/config/gateway ───────────────────────────────────────
+export async function setGateway(req: Request, res: Response): Promise<void> {
+  const { gateway } = req.body as { gateway: string };
+  if (!['stripe', 'razorpay'].includes(gateway)) {
+    res.status(400).json({ error: 'Invalid gateway. Must be "stripe" or "razorpay".' });
+    return;
+  }
+  await (await import('../../lib/prisma.js')).prisma.appConfig.upsert({
+    where:  { key: 'active_payment_gateway' },
+    update: { value: gateway },
+    create: { key: 'active_payment_gateway', value: gateway },
+  });
+  res.json({ gateway });
+}
