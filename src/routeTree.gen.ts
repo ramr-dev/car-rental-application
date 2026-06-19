@@ -35,6 +35,7 @@ import { Route as BookingCancelledRouteImport } from './routes/booking.cancelled
 import { Route as BookingIdRouteImport } from './routes/booking.$id'
 import { Route as AdminVehiclesRouteImport } from './routes/admin.vehicles'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as AdminTrackingRouteImport } from './routes/admin.tracking'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as AdminProfileRouteImport } from './routes/admin.profile'
@@ -174,6 +175,11 @@ const AdminUsersRoute = AdminUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminTrackingRoute = AdminTrackingRouteImport.update({
+  id: '/tracking',
+  path: '/tracking',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -236,6 +242,7 @@ export interface FileRoutesByFullPath {
   '/admin/profile': typeof AdminProfileRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/tracking': typeof AdminTrackingRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/vehicles': typeof AdminVehiclesRoute
   '/booking/$id': typeof BookingIdRoute
@@ -270,6 +277,7 @@ export interface FileRoutesByTo {
   '/admin/profile': typeof AdminProfileRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/tracking': typeof AdminTrackingRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/vehicles': typeof AdminVehiclesRoute
   '/booking/$id': typeof BookingIdRoute
@@ -307,6 +315,7 @@ export interface FileRoutesById {
   '/admin/profile': typeof AdminProfileRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/tracking': typeof AdminTrackingRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/vehicles': typeof AdminVehiclesRoute
   '/booking/$id': typeof BookingIdRoute
@@ -345,6 +354,7 @@ export interface FileRouteTypes {
     | '/admin/profile'
     | '/admin/reports'
     | '/admin/settings'
+    | '/admin/tracking'
     | '/admin/users'
     | '/admin/vehicles'
     | '/booking/$id'
@@ -379,6 +389,7 @@ export interface FileRouteTypes {
     | '/admin/profile'
     | '/admin/reports'
     | '/admin/settings'
+    | '/admin/tracking'
     | '/admin/users'
     | '/admin/vehicles'
     | '/booking/$id'
@@ -415,6 +426,7 @@ export interface FileRouteTypes {
     | '/admin/profile'
     | '/admin/reports'
     | '/admin/settings'
+    | '/admin/tracking'
     | '/admin/users'
     | '/admin/vehicles'
     | '/booking/$id'
@@ -634,6 +646,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsersRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/tracking': {
+      id: '/admin/tracking'
+      path: '/tracking'
+      fullPath: '/admin/tracking'
+      preLoaderRoute: typeof AdminTrackingRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/settings': {
       id: '/admin/settings'
       path: '/settings'
@@ -702,6 +721,7 @@ interface AdminRouteChildren {
   AdminProfileRoute: typeof AdminProfileRoute
   AdminReportsRoute: typeof AdminReportsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminTrackingRoute: typeof AdminTrackingRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminVehiclesRoute: typeof AdminVehiclesRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -716,6 +736,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminProfileRoute: AdminProfileRoute,
   AdminReportsRoute: AdminReportsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
+  AdminTrackingRoute: AdminTrackingRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminVehiclesRoute: AdminVehiclesRoute,
   AdminIndexRoute: AdminIndexRoute,

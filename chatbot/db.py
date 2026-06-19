@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import OperationalError
 from contextlib import contextmanager
-from typing import Generator
+from typing import Generator    
 import logging
 
 from config import settings

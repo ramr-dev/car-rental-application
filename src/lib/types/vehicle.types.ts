@@ -27,6 +27,9 @@ export interface Vehicle {
     topSpeed: string;
     acceleration: string;
   };
+  latitude?: number | null;
+  longitude?: number | null;
+  gpsLastSeen?: string | null;
 }
 
 export interface Review {
