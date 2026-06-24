@@ -14,6 +14,7 @@ function toUserResponse(user: {
   avatar: string | null;
   role: string;
   kycStatus: string;
+  hostStatus: string;
   isBlocked: boolean;
   createdAt: Date;
 }) {
@@ -23,9 +24,10 @@ function toUserResponse(user: {
     email:     user.email,
     phone:     user.phone   ?? undefined,
     avatar:    user.avatar  ?? undefined,
-    role:      user.role === 'ADMIN' ? 'admin' : 'user',
+    role:      user.role === 'ADMIN' ? 'admin' : user.role === 'HOST' ? 'host' : 'user',
     kycStatus: user.kycStatus.toLowerCase() as
       'not_started' | 'pending' | 'approved' | 'rejected',
+    hostStatus: user.hostStatus,
     isBlocked: user.isBlocked,
     createdAt: user.createdAt.toISOString(),
   };
@@ -38,7 +40,7 @@ export async function getMe(userId: number) {
     where: { id: userId },
     select: {
       id: true, name: true, email: true, phone: true,
-      avatar: true, role: true, kycStatus: true,
+      avatar: true, role: true, kycStatus: true, hostStatus: true,
       isBlocked: true, createdAt: true,
     },
   });
@@ -59,7 +61,7 @@ export async function updateMe(userId: number, input: UpdateProfileInput) {
     },
     select: {
       id: true, name: true, email: true, phone: true,
-      avatar: true, role: true, kycStatus: true,
+      avatar: true, role: true, kycStatus: true, hostStatus: true,
       isBlocked: true, createdAt: true,
     },
   });

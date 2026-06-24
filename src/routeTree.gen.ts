@@ -24,6 +24,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as VehiclesIdRouteImport } from './routes/vehicles.$id'
+import { Route as HostRegisterRouteImport } from './routes/host.register'
+import { Route as HostDashboardRouteImport } from './routes/host.dashboard'
 import { Route as DashboardSavedRouteImport } from './routes/dashboard.saved'
 import { Route as DashboardProfileRouteImport } from './routes/dashboard.profile'
 import { Route as DashboardNotificationsRouteImport } from './routes/dashboard.notifications'
@@ -42,6 +44,7 @@ import { Route as AdminProfileRouteImport } from './routes/admin.profile'
 import { Route as AdminPaymentsRouteImport } from './routes/admin.payments'
 import { Route as AdminOffersRouteImport } from './routes/admin.offers'
 import { Route as AdminKycRouteImport } from './routes/admin.kyc'
+import { Route as AdminHostsRouteImport } from './routes/admin.hosts'
 import { Route as AdminFleetRouteImport } from './routes/admin.fleet'
 import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
 
@@ -119,6 +122,16 @@ const VehiclesIdRoute = VehiclesIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => VehiclesRoute,
+} as any)
+const HostRegisterRoute = HostRegisterRouteImport.update({
+  id: '/host/register',
+  path: '/host/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HostDashboardRoute = HostDashboardRouteImport.update({
+  id: '/host/dashboard',
+  path: '/host/dashboard',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardSavedRoute = DashboardSavedRouteImport.update({
   id: '/saved',
@@ -210,6 +223,11 @@ const AdminKycRoute = AdminKycRouteImport.update({
   path: '/kyc',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminHostsRoute = AdminHostsRouteImport.update({
+  id: '/hosts',
+  path: '/hosts',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminFleetRoute = AdminFleetRouteImport.update({
   id: '/fleet',
   path: '/fleet',
@@ -236,6 +254,7 @@ export interface FileRoutesByFullPath {
   '/verify-otp': typeof VerifyOtpRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/fleet': typeof AdminFleetRoute
+  '/admin/hosts': typeof AdminHostsRoute
   '/admin/kyc': typeof AdminKycRoute
   '/admin/offers': typeof AdminOffersRoute
   '/admin/payments': typeof AdminPaymentsRoute
@@ -254,6 +273,8 @@ export interface FileRoutesByFullPath {
   '/dashboard/notifications': typeof DashboardNotificationsRoute
   '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/saved': typeof DashboardSavedRoute
+  '/host/dashboard': typeof HostDashboardRoute
+  '/host/register': typeof HostRegisterRoute
   '/vehicles/$id': typeof VehiclesIdRoute
   '/admin/': typeof AdminIndexRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -271,6 +292,7 @@ export interface FileRoutesByTo {
   '/verify-otp': typeof VerifyOtpRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/fleet': typeof AdminFleetRoute
+  '/admin/hosts': typeof AdminHostsRoute
   '/admin/kyc': typeof AdminKycRoute
   '/admin/offers': typeof AdminOffersRoute
   '/admin/payments': typeof AdminPaymentsRoute
@@ -289,6 +311,8 @@ export interface FileRoutesByTo {
   '/dashboard/notifications': typeof DashboardNotificationsRoute
   '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/saved': typeof DashboardSavedRoute
+  '/host/dashboard': typeof HostDashboardRoute
+  '/host/register': typeof HostRegisterRoute
   '/vehicles/$id': typeof VehiclesIdRoute
   '/admin': typeof AdminIndexRoute
   '/dashboard': typeof DashboardIndexRoute
@@ -309,6 +333,7 @@ export interface FileRoutesById {
   '/verify-otp': typeof VerifyOtpRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/fleet': typeof AdminFleetRoute
+  '/admin/hosts': typeof AdminHostsRoute
   '/admin/kyc': typeof AdminKycRoute
   '/admin/offers': typeof AdminOffersRoute
   '/admin/payments': typeof AdminPaymentsRoute
@@ -327,6 +352,8 @@ export interface FileRoutesById {
   '/dashboard/notifications': typeof DashboardNotificationsRoute
   '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/saved': typeof DashboardSavedRoute
+  '/host/dashboard': typeof HostDashboardRoute
+  '/host/register': typeof HostRegisterRoute
   '/vehicles/$id': typeof VehiclesIdRoute
   '/admin/': typeof AdminIndexRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -348,6 +375,7 @@ export interface FileRouteTypes {
     | '/verify-otp'
     | '/admin/bookings'
     | '/admin/fleet'
+    | '/admin/hosts'
     | '/admin/kyc'
     | '/admin/offers'
     | '/admin/payments'
@@ -366,6 +394,8 @@ export interface FileRouteTypes {
     | '/dashboard/notifications'
     | '/dashboard/profile'
     | '/dashboard/saved'
+    | '/host/dashboard'
+    | '/host/register'
     | '/vehicles/$id'
     | '/admin/'
     | '/dashboard/'
@@ -383,6 +413,7 @@ export interface FileRouteTypes {
     | '/verify-otp'
     | '/admin/bookings'
     | '/admin/fleet'
+    | '/admin/hosts'
     | '/admin/kyc'
     | '/admin/offers'
     | '/admin/payments'
@@ -401,6 +432,8 @@ export interface FileRouteTypes {
     | '/dashboard/notifications'
     | '/dashboard/profile'
     | '/dashboard/saved'
+    | '/host/dashboard'
+    | '/host/register'
     | '/vehicles/$id'
     | '/admin'
     | '/dashboard'
@@ -420,6 +453,7 @@ export interface FileRouteTypes {
     | '/verify-otp'
     | '/admin/bookings'
     | '/admin/fleet'
+    | '/admin/hosts'
     | '/admin/kyc'
     | '/admin/offers'
     | '/admin/payments'
@@ -438,6 +472,8 @@ export interface FileRouteTypes {
     | '/dashboard/notifications'
     | '/dashboard/profile'
     | '/dashboard/saved'
+    | '/host/dashboard'
+    | '/host/register'
     | '/vehicles/$id'
     | '/admin/'
     | '/dashboard/'
@@ -460,6 +496,8 @@ export interface RootRouteChildren {
   BookingCancelledRoute: typeof BookingCancelledRoute
   BookingPaymentRoute: typeof BookingPaymentRoute
   BookingSuccessRoute: typeof BookingSuccessRoute
+  HostDashboardRoute: typeof HostDashboardRoute
+  HostRegisterRoute: typeof HostRegisterRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -568,6 +606,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/vehicles/$id'
       preLoaderRoute: typeof VehiclesIdRouteImport
       parentRoute: typeof VehiclesRoute
+    }
+    '/host/register': {
+      id: '/host/register'
+      path: '/host/register'
+      fullPath: '/host/register'
+      preLoaderRoute: typeof HostRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/host/dashboard': {
+      id: '/host/dashboard'
+      path: '/host/dashboard'
+      fullPath: '/host/dashboard'
+      preLoaderRoute: typeof HostDashboardRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/dashboard/saved': {
       id: '/dashboard/saved'
@@ -695,6 +747,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminKycRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/hosts': {
+      id: '/admin/hosts'
+      path: '/hosts'
+      fullPath: '/admin/hosts'
+      preLoaderRoute: typeof AdminHostsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/fleet': {
       id: '/admin/fleet'
       path: '/fleet'
@@ -715,6 +774,7 @@ declare module '@tanstack/react-router' {
 interface AdminRouteChildren {
   AdminBookingsRoute: typeof AdminBookingsRoute
   AdminFleetRoute: typeof AdminFleetRoute
+  AdminHostsRoute: typeof AdminHostsRoute
   AdminKycRoute: typeof AdminKycRoute
   AdminOffersRoute: typeof AdminOffersRoute
   AdminPaymentsRoute: typeof AdminPaymentsRoute
@@ -730,6 +790,7 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminBookingsRoute: AdminBookingsRoute,
   AdminFleetRoute: AdminFleetRoute,
+  AdminHostsRoute: AdminHostsRoute,
   AdminKycRoute: AdminKycRoute,
   AdminOffersRoute: AdminOffersRoute,
   AdminPaymentsRoute: AdminPaymentsRoute,
@@ -795,6 +856,8 @@ const rootRouteChildren: RootRouteChildren = {
   BookingCancelledRoute: BookingCancelledRoute,
   BookingPaymentRoute: BookingPaymentRoute,
   BookingSuccessRoute: BookingSuccessRoute,
+  HostDashboardRoute: HostDashboardRoute,
+  HostRegisterRoute: HostRegisterRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

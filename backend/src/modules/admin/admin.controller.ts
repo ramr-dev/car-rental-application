@@ -59,8 +59,8 @@ export async function getGateway(_req: Request, res: Response): Promise<void> {
 // ── PATCH /api/admin/config/gateway ───────────────────────────────────────
 export async function setGateway(req: Request, res: Response): Promise<void> {
   const { gateway } = req.body as { gateway: string };
-  if (!['stripe', 'razorpay'].includes(gateway)) {
-    res.status(400).json({ error: 'Invalid gateway. Must be "stripe" or "razorpay".' });
+  if (!['stripe', 'razorpay', 'braintree'].includes(gateway)) {
+    res.status(400).json({ error: 'Invalid gateway. Must be "stripe", "razorpay", or "braintree".' });
     return;
   }
   await (await import('../../lib/prisma.js')).prisma.appConfig.upsert({
@@ -69,4 +69,56 @@ export async function setGateway(req: Request, res: Response): Promise<void> {
     create: { key: 'active_payment_gateway', value: gateway },
   });
   res.json({ gateway });
+}
+
+// ── P2P Host & Verification Management ─────────────────────────────────────
+import * as adminHostService from './admin.host.service.js';
+
+// GET /api/admin/hosts/pending
+export async function listPendingHosts(_req: Request, res: Response): Promise<void> {
+  const result = await adminHostService.listPendingHosts();
+  res.json(result);
+}
+
+// PATCH /api/admin/hosts/:userId/verify
+export async function verifyHost(req: Request, res: Response): Promise<void> {
+  const userId = Number(req.params.userId);
+  const { status } = req.body as { status: 'VERIFIED' | 'REJECTED' };
+  if (!['VERIFIED', 'REJECTED'].includes(status)) {
+    res.status(400).json({ error: 'Status must be VERIFIED or REJECTED.' });
+    return;
+  }
+  const result = await adminHostService.verifyHost(userId, status);
+  res.json(result);
+}
+
+// GET /api/admin/vehicles/pending
+export async function listPendingVehicles(_req: Request, res: Response): Promise<void> {
+  const result = await adminHostService.listPendingVehicles();
+  res.json(result);
+}
+
+// PATCH /api/admin/vehicles/:vehicleId/approve
+export async function approveVehicle(req: Request, res: Response): Promise<void> {
+  const vehicleId = Number(req.params.vehicleId);
+  const { approve } = req.body as { approve: boolean };
+  const result = await adminHostService.approveVehicle(vehicleId, approve);
+  res.json(result);
+}
+
+// GET /api/admin/payouts/pending
+export async function listPendingPayouts(_req: Request, res: Response): Promise<void> {
+  const result = await adminHostService.listPendingPayouts();
+  res.json(result);
+}
+
+// POST /api/admin/payouts/process
+export async function processPayout(req: Request, res: Response): Promise<void> {
+  const { hostId, referenceNum } = req.body as { hostId: number; referenceNum?: string };
+  if (!hostId) {
+    res.status(400).json({ error: 'hostId is required.' });
+    return;
+  }
+  const result = await adminHostService.processPayout(hostId, referenceNum);
+  res.status(201).json(result);
 }

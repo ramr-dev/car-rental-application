@@ -13,7 +13,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/store/auth";
 import { authService } from "@/lib/api/auth.service";
 
-export const Route = createFileRoute("/login")({ component: LoginPage });
+const loginSearchSchema = z.object({
+  redirect: z.string().optional(),
+});
+
+type LoginSearch = z.infer<typeof loginSearchSchema>;
+
+export const Route = createFileRoute("/login")({
+  validateSearch: (search: Record<string, unknown>): LoginSearch => loginSearchSchema.parse(search),
+  component: LoginPage,
+});
 
 const schema = z.object({
   email: z.string().email("Enter a valid email address"),
@@ -23,6 +32,7 @@ const schema = z.object({
 type FormVals = z.infer<typeof schema>;
 
 function LoginPage() {
+  const { redirect } = Route.useSearch();
   const {
     register,
     handleSubmit,
@@ -38,7 +48,7 @@ function LoginPage() {
       setTokens(result.accessToken, result.refreshToken);
       setUser(result.user);
       toast.success("Welcome back!");
-      navigate({ to: result.user.role === "admin" ? "/admin" : "/dashboard" });
+      navigate({ to: (redirect || (result.user.role === "admin" ? "/admin" : "/dashboard")) as any });
     } catch (err: any) {
       const message = err?.response?.data?.error ?? "Invalid email or password.";
       toast.error(message);

@@ -30,6 +30,15 @@ export interface Vehicle {
   latitude?: number | null;
   longitude?: number | null;
   gpsLastSeen?: string | null;
+  host?: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+  isApproved?: boolean;
+  registrationNumber?: string | null;
+  rcUrl?: string | null;
+  insuranceUrl?: string | null;
 }
 
 export interface Review {

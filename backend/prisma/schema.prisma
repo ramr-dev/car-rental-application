@@ -18,6 +18,7 @@ datasource db {
 
 enum UserRole {
   CUSTOMER
+  HOST
   ADMIN
 }
 
@@ -26,6 +27,18 @@ enum KycStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum HostStatus {
+  NOT_A_HOST
+  PENDING_KYC
+  VERIFIED
+  REJECTED
+}
+
+enum ChecklistType {
+  CHECK_IN
+  CHECK_OUT
 }
 
 enum VehicleType {
@@ -66,22 +79,26 @@ enum DocumentType {
 // ─── Models ────────────────────────────────────────────────────────────────
 
 model User {
-  id            Int           @id @default(autoincrement())
-  email         String        @unique
+  id            Int            @id @default(autoincrement())
+  email         String         @unique
   password      String
   name          String
   phone         String?
   avatar        String?
-  role          UserRole      @default(CUSTOMER)
-  kycStatus     KycStatus     @default(NOT_STARTED) @map("kyc_status")
-  isBlocked     Boolean       @default(false)        @map("is_blocked")
-  createdAt     DateTime      @default(now())        @map("created_at")
-  updatedAt     DateTime      @updatedAt             @map("updated_at")
+  role          UserRole       @default(CUSTOMER)
+  kycStatus     KycStatus      @default(NOT_STARTED) @map("kyc_status")
+  hostStatus    HostStatus     @default(NOT_A_HOST) @map("host_status")
+  isBlocked     Boolean        @default(false)        @map("is_blocked")
+  createdAt     DateTime       @default(now())        @map("created_at")
+  updatedAt     DateTime       @updatedAt             @map("updated_at")
 
   bookings      Booking[]
   kycDocuments  KycDocument[]
   refreshTokens RefreshToken[]
   reviews       Review[]
+  hostProfile   HostProfile?
+  vehicles      Vehicle[]
+  payouts       HostPayout[]
 
   @@map("users")
 }
@@ -117,8 +134,18 @@ model Vehicle {
   longitude   Decimal?  @db.Decimal(10, 7)
   gpsLastSeen DateTime? @map("gps_last_seen")
 
+  // ── P2P host fields ───────────────────────────────────────────
+  hostId             Int?         @map("host_id")
+  isApproved         Boolean      @default(true)    @map("is_approved")
+  registrationNumber String?      @map("registration_number")
+  rcUrl              String?      @map("rc_url")
+  insuranceUrl       String?      @map("insurance_url")
+
   bookings     Booking[]
   reviews      Review[]
+  host         User?        @relation(fields: [hostId], references: [id], onDelete: SetNull)
+  checklists   TripChecklist[]
+  schedules    HostSchedule[]
 
   @@map("vehicles")
 }
@@ -152,9 +179,11 @@ model Booking {
   createdAt             DateTime      @default(now())    @map("created_at")
   updatedAt             DateTime      @updatedAt         @map("updated_at")
 
-  user    User    @relation(fields: [userId],    references: [id])
-  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
-  review  Review?
+  user        User    @relation(fields: [userId],    references: [id])
+  vehicle     Vehicle @relation(fields: [vehicleId], references: [id])
+  review      Review?
+  checklists  TripChecklist[]
+  hostEarning HostEarning?
 
   @@index([userId])
   @@index([vehicleId])
@@ -169,7 +198,7 @@ model KycDocument {
   documentNumber String       @map("document_number")
   expiryDate     DateTime     @map("expiry_date")
   country        String
-  filePath       String       @map("file_path")
+  filePath       String       @db.VarChar(500) @map("file_path")
   status         KycStatus    @default(PENDING)
   reviewedById   Int?         @map("reviewed_by_id")
   reviewNote     String?      @map("review_note")
@@ -250,4 +279,78 @@ model AppConfig {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("app_config")
+}
+
+model HostProfile {
+  id              Int    @id @default(autoincrement())
+  userId          Int    @unique @map("user_id")
+  panNumber      String @map("pan_number")
+  bankAccountNum String @map("bank_account_num")
+  bankIfsc       String @map("bank_ifsc")
+  bankName       String @map("bank_name")
+  aadhaarFrontUrl String @map("aadhaar_front_url")
+  aadhaarBackUrl  String @map("aadhaar_back_url")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("host_profiles")
+}
+
+model HostSchedule {
+  id        Int      @id @default(autoincrement())
+  vehicleId Int      @map("vehicle_id")
+  startDate DateTime @map("start_date")
+  endDate   DateTime @map("end_date")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("host_schedules")
+}
+
+model TripChecklist {
+  id              Int           @id @default(autoincrement())
+  bookingId       String        @map("booking_id")
+  vehicleId       Int           @map("vehicle_id")
+  type            ChecklistType
+  odometerReading Int           @map("odometer_reading")
+  fuelLevel       Int           @map("fuel_level")
+  damageNotes     String?       @db.Text @map("damage_notes")
+  images          Json
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("trip_checklists")
+}
+
+model HostEarning {
+  id                 Int      @id @default(autoincrement())
+  bookingId          String   @unique @map("booking_id")
+  hostId             Int      @map("host_id")
+  grossAmount        Decimal  @db.Decimal(10, 2) @map("gross_amount")
+  platformCommission Decimal  @db.Decimal(10, 2) @map("platform_commission")
+  netEarnings        Decimal  @db.Decimal(10, 2) @map("net_earnings")
+  payoutId           Int?     @map("payout_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  booking Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  payout  HostPayout? @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+
+  @@map("host_earnings")
+}
+
+model HostPayout {
+  id           Int           @id @default(autoincrement())
+  hostId       Int           @map("host_id")
+  amount       Decimal       @db.Decimal(10, 2)
+  status       String        @default("PENDING")
+  referenceNum String?       @map("reference_num")
+  paidAt       DateTime?     @map("paid_at")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  host     User          @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  earnings HostEarning[]
+
+  @@map("host_payouts")
 }

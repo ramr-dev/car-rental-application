@@ -164,7 +164,14 @@ function AdminVehicles() {
                     <img src={v.image} alt="" className="h-12 w-16 rounded-md object-cover border border-border" />
                     <div>
                       <p className="font-semibold text-sm leading-none mb-1">{v.name}</p>
-                      <p className="text-xs text-muted-foreground">{v.brand} • {v.year}</p>
+                      <p className="text-xs text-muted-foreground mb-1">{v.brand} • {v.year}</p>
+                      <p className="text-[10px]">
+                        {v.host ? (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-medium">Hosted by: {v.host.name}</span>
+                        ) : (
+                          <span className="text-muted-foreground">Platform Owned</span>
+                        )}
+                      </p>
                     </div>
                   </div>
                 </TableCell>

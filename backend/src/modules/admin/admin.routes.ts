@@ -96,3 +96,11 @@ adminRouter.get('/config/gateway',   asyncHandler(controller.getGateway));
 
 // PATCH /api/admin/config/gateway → body: { gateway: 'stripe' | 'razorpay' }
 adminRouter.patch('/config/gateway', asyncHandler(controller.setGateway));
+
+// ── P2P Host & Verification Management ─────────────────────────────────────
+adminRouter.get('/hosts/pending',            asyncHandler(controller.listPendingHosts));
+adminRouter.patch('/hosts/:userId/verify',   asyncHandler(controller.verifyHost));
+adminRouter.get('/vehicles/pending',         asyncHandler(controller.listPendingVehicles));
+adminRouter.patch('/vehicles/:vehicleId/approve', asyncHandler(controller.approveVehicle));
+adminRouter.get('/payouts/pending',          asyncHandler(controller.listPendingPayouts));
+adminRouter.post('/payouts/process',          asyncHandler(controller.processPayout));

@@ -24,8 +24,6 @@ const MAX_SIZE = 10 * 1024 * 1024;
 
 const SLOTS = [
   { id: "license",  title: "Driving License",       desc: "Front and back of your valid license", icon: FileText },
-  { id: "passport", title: "Passport / National ID", desc: "Government-issued photo ID",           icon: FileText },
-  { id: "selfie",   title: "Selfie Verification",    desc: "A clear photo of your face",           icon: Camera  },
 ] as const;
 
 type SlotId = (typeof SLOTS)[number]["id"];
@@ -42,8 +40,6 @@ function KycPage() {
 
   const [slots, setSlots] = useState<Record<SlotId, SlotState>>({
     license:  { uploading: false, url: null, mimeType: null },
-    passport: { uploading: false, url: null, mimeType: null },
-    selfie:   { uploading: false, url: null, mimeType: null },
   });
 
   const [docFields, setDocFields] = useState({
@@ -53,11 +49,10 @@ function KycPage() {
     country: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [draggedSlot, setDraggedSlot] = useState<string | null>(null);
 
   const fileRefs = {
     license:  useRef<HTMLInputElement>(null),
-    passport: useRef<HTMLInputElement>(null),
-    selfie:   useRef<HTMLInputElement>(null),
   };
 
   // Fetch the user's existing KYC submissions
@@ -131,8 +126,6 @@ function KycPage() {
     try {
       const filePaths = JSON.stringify({
         license:  slots.license.url,
-        passport: slots.passport.url,
-        selfie:   slots.selfie.url,
       });
       await userService.submitKyc({
         documentType:   docFields.documentType,
@@ -337,8 +330,23 @@ function KycPage() {
 
                     {!isUp && !state.uploading && (
                       <label
-                        className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/30 p-8 text-center transition-colors hover:border-primary hover:bg-accent/30"
+                        className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-all duration-200 ${
+                          draggedSlot === slot.id
+                            ? "border-primary bg-primary/10 text-primary scale-[0.99] border-solid"
+                            : "border-border bg-muted/30 hover:border-primary hover:bg-accent/30"
+                        }`}
                         onClick={() => fileRefs[slot.id].current?.click()}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDraggedSlot(slot.id);
+                        }}
+                        onDragLeave={() => setDraggedSlot(null)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setDraggedSlot(null);
+                          const file = e.dataTransfer.files?.[0];
+                          if (file) handleFileChange(slot.id, file);
+                        }}
                       >
                         <Upload className="h-6 w-6 text-muted-foreground" />
                         <p className="mt-2 text-sm font-medium">Drop file here or click to browse</p>
@@ -361,17 +369,11 @@ function KycPage() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <Label className="text-xs">Document type</Label>
-                      <select
-                        className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        value={docFields.documentType}
-                        onChange={(e) =>
-                          setDocFields((f) => ({ ...f, documentType: e.target.value as SubmitKycPayload["documentType"] }))
-                        }
-                      >
-                        <option value="DRIVERS_LICENSE">Driver's License</option>
-                        <option value="PASSPORT">Passport</option>
-                        <option value="NATIONAL_ID">National ID</option>
-                      </select>
+                      <Input
+                        className="mt-1 bg-muted cursor-not-allowed text-muted-foreground"
+                        value="Driver's License"
+                        disabled
+                      />
                     </div>
                     <div>
                       <Label className="text-xs">Document number</Label>

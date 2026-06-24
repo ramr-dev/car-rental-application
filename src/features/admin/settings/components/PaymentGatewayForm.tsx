@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   CreditCard,
   Smartphone,
-  Building2,
+  Globe,
   Wallet,
   CheckCircle2,
   AlertCircle,
@@ -18,12 +18,12 @@ import { Badge } from "@/components/ui/badge";
 
 // ── API helpers ─────────────────────────────────────────────────────────────
 
-async function fetchGateway(): Promise<"stripe" | "razorpay"> {
-  const res = await api.get<{ gateway: "stripe" | "razorpay" }>("/admin/config/gateway");
+async function fetchGateway(): Promise<"stripe" | "razorpay" | "braintree"> {
+  const res = await api.get<{ gateway: "stripe" | "razorpay" | "braintree" }>("/admin/config/gateway");
   return res.data.gateway;
 }
 
-async function saveGateway(gateway: "stripe" | "razorpay"): Promise<void> {
+async function saveGateway(gateway: "stripe" | "razorpay" | "braintree"): Promise<void> {
   await api.patch("/admin/config/gateway", { gateway });
 }
 
@@ -56,6 +56,19 @@ const GATEWAYS = [
     bg:          "bg-blue-500/5",
     note:        "Charges in INR. Conversion applied at checkout (~₹83/USD).",
   },
+  {
+    id:          "braintree" as const,
+    name:        "Braintree",
+    description: "Accept credit cards, PayPal, and digital wallets via Drop-in UI.",
+    methods:     ["Credit / Debit Cards", "PayPal Wallet", "Google Pay / Apple Pay", "Advanced Fraud Protection"],
+    badge:       "🌐 Braintree",
+    badgeClass:  "border-sky-500/40 bg-sky-500/10 text-sky-600",
+    icon:        Globe,
+    colorClass:  "text-sky-500",
+    borderActive:"border-sky-500",
+    bg:          "bg-sky-500/5",
+    note:        "Charges in USD. Utilises secure client token flow.",
+  },
 ];
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -69,7 +82,7 @@ export function PaymentGatewayForm() {
     staleTime: 30_000,
   });
 
-  const [selected, setSelected] = useState<"stripe" | "razorpay" | null>(null);
+  const [selected, setSelected] = useState<"stripe" | "razorpay" | "braintree" | null>(null);
   const pending = selected ?? activeGateway ?? "stripe";
 
   const { mutate: applyGateway, isPending: isSaving } = useMutation({
@@ -77,7 +90,8 @@ export function PaymentGatewayForm() {
     onSuccess: (_, gateway) => {
       queryClient.setQueryData(["admin-gateway"], gateway);
       queryClient.invalidateQueries({ queryKey: ["active-gateway"] });
-      toast.success(`✅ Active gateway switched to ${gateway === "razorpay" ? "Razorpay" : "Stripe"}.`);
+      const label = gateway === "razorpay" ? "Razorpay" : gateway === "braintree" ? "Braintree" : "Stripe";
+      toast.success(`✅ Active gateway switched to ${label}.`);
       setSelected(null);
     },
     onError: () => {
@@ -121,22 +135,34 @@ export function PaymentGatewayForm() {
         <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
         <span>
           Currently active:{" "}
-          <strong>{activeGateway === "razorpay" ? "Razorpay (UPI + Cards)" : "Stripe (International)"}</strong>
+          <strong>
+            {activeGateway === "razorpay"
+              ? "Razorpay (UPI + Cards)"
+              : activeGateway === "braintree"
+              ? "Braintree (Cards/PayPal)"
+              : "Stripe (International)"}
+          </strong>
         </span>
         <Badge
           variant="outline"
           className={
             activeGateway === "razorpay"
               ? "ml-auto border-blue-500/40 bg-blue-500/10 text-blue-500"
+              : activeGateway === "braintree"
+              ? "ml-auto border-sky-500/40 bg-sky-500/10 text-sky-600"
               : "ml-auto border-violet-500/40 bg-violet-500/10 text-violet-500"
           }
         >
-          {activeGateway === "razorpay" ? "🇮🇳 UPI Enabled" : "💳 International"}
+          {activeGateway === "razorpay"
+            ? "🇮🇳 UPI Enabled"
+            : activeGateway === "braintree"
+            ? "🌐 Braintree Active"
+            : "💳 International"}
         </Badge>
       </div>
 
       {/* Gateway selection cards */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         {GATEWAYS.map((gw) => {
           const Icon = gw.icon;
           const isActive = activeGateway === gw.id;
@@ -225,6 +251,23 @@ export function PaymentGatewayForm() {
         </div>
       )}
 
+      {/* Warning for Braintree — test keys reminder */}
+      {pending === "braintree" && (
+        <div className="flex items-start gap-3 rounded-xl border border-sky-500/30 bg-sky-500/5 p-4 text-sm text-sky-700 dark:text-sky-400">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-medium">Braintree Sandbox Mode Active</p>
+            <p className="mt-0.5 text-xs opacity-80">
+              Using sandbox keys. No real money will be charged. Replace{" "}
+              <code className="font-mono bg-sky-500/10 px-1 py-0.5 rounded">BRAINTREE_MERCHANT_ID</code>,{" "}
+              <code className="font-mono bg-sky-500/10 px-1 py-0.5 rounded">BRAINTREE_PUBLIC_KEY</code>, and{" "}
+              <code className="font-mono bg-sky-500/10 px-1 py-0.5 rounded">BRAINTREE_PRIVATE_KEY</code>{" "}
+              in <code className="font-mono bg-sky-500/10 px-1 py-0.5 rounded">backend/.env</code> with your live keys when ready.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Save button */}
       <div className="flex items-center gap-3 pt-2">
         <Button
@@ -241,7 +284,12 @@ export function PaymentGatewayForm() {
           ) : (
             <>
               <RefreshCw className="mr-2 h-4 w-4" />
-              Switch to {pending === "razorpay" ? "Razorpay" : "Stripe"}
+              Switch to{" "}
+              {pending === "razorpay"
+                ? "Razorpay"
+                : pending === "braintree"
+                ? "Braintree"
+                : "Stripe"}
             </>
           )}
         </Button>

@@ -1,13 +1,14 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
+import type { UserRole } from '@prisma/client';
 import type { JwtPayload } from '../middleware/auth.middleware.js';
 
 // ─── Access token ──────────────────────────────────────────────────────────
 // Short-lived JWT sent in Authorization header for every API request.
 // Payload: { userId, role }
 
-export function generateAccessToken(userId: number, role: 'CUSTOMER' | 'ADMIN'): string {
+export function generateAccessToken(userId: number, role: UserRole): string {
   return jwt.sign(
     { userId, role } satisfies JwtPayload,
     env.JWT_ACCESS_SECRET,
@@ -51,7 +52,7 @@ export interface TokenPair {
   refreshTokenExpiresAt: Date;
 }
 
-export function generateTokenPair(userId: number, role: 'CUSTOMER' | 'ADMIN'): TokenPair {
+export function generateTokenPair(userId: number, role: UserRole): TokenPair {
   return {
     accessToken: generateAccessToken(userId, role),
     refreshToken: generateRefreshToken(),

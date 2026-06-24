@@ -19,6 +19,7 @@ function toUserResponse(user: {
   avatar: string | null;
   role: UserRole;
   kycStatus: string;
+  hostStatus: string;
 }) {
   return {
     id: String(user.id),
@@ -26,12 +27,13 @@ function toUserResponse(user: {
     email: user.email,
     phone: user.phone ?? undefined,
     avatar: user.avatar ?? undefined,
-    role: user.role === 'ADMIN' ? 'admin' : 'user',
+    role: user.role === 'ADMIN' ? 'admin' : user.role === 'HOST' ? 'host' : 'user',
     kycStatus: user.kycStatus.toLowerCase().replace('_', '_') as
       | 'not_started'
       | 'pending'
       | 'approved'
       | 'rejected',
+    hostStatus: user.hostStatus,
   } as const;
 }
 

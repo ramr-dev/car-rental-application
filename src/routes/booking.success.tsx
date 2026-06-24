@@ -19,12 +19,13 @@ export const Route = createFileRoute("/booking/success")({
   validateSearch: (search: Record<string, unknown>) => ({
     session_id:     (search.session_id as string)     ?? "",
     payment_intent: (search.payment_intent as string) ?? "",
-    razorpay:       (search.razorpay as string)        ?? "",
+    razorpay:       search.razorpay ? String(search.razorpay) : "",
+    braintree:      search.braintree ? String(search.braintree) : "",
   }),
 });
 
 function BookingSuccessPage() {
-  const { session_id: sessionId, payment_intent: paymentIntentId, razorpay: isRazorpay } = Route.useSearch();
+  const { session_id: sessionId, payment_intent: paymentIntentId, razorpay: isRazorpay, braintree: isBraintree } = Route.useSearch();
   const { user } = useAuth();
   const { resetTrip } = useBookingDraft();
   const navigate = useNavigate();
@@ -42,7 +43,9 @@ function BookingSuccessPage() {
   useEffect(() => {
     if (!hydrated) return;
 
-    if (!user) { navigate({ to: "/login" }); return; }
+    const raw = localStorage.getItem("drivelux-auth");
+    const storedUser = raw ? JSON.parse(raw)?.state?.user : null;
+    if (!storedUser && !user) { navigate({ to: "/login" }); return; }
 
     // ── Razorpay flow: booking already verified on payment page ──────────────
     // Just fetch the user's most recent confirmed booking to display.
@@ -59,6 +62,26 @@ function BookingSuccessPage() {
           })
           .catch(() => {
             // Show generic success even without booking details
+            setLoading(false);
+          })
+      );
+      return;
+    }
+
+    // ── Braintree flow: booking already created on payment page ──────────────
+    // Same pattern as Razorpay — fetch the most recent confirmed booking.
+    if (isBraintree === '1') {
+      if (verifiedRef.current) return;
+      verifiedRef.current = true;
+      import('@/lib/api/client').then(({ api }) =>
+        api.get<{ data: Booking[] }>('/bookings?limit=1&status=CONFIRMED')
+          .then((res) => {
+            const latest = (res.data as any)?.data?.[0] ?? null;
+            setBooking(latest);
+            resetTrip();
+            setLoading(false);
+          })
+          .catch(() => {
             setLoading(false);
           })
       );
@@ -89,7 +112,7 @@ function BookingSuccessPage() {
         setError(msg);
         setLoading(false);
       });
-  }, [hydrated, sessionId, paymentIntentId, isRazorpay, user, navigate, resetTrip]);
+  }, [hydrated, sessionId, paymentIntentId, isRazorpay, isBraintree, user, navigate, resetTrip]);
 
   if (!hydrated || loading) {
     return (

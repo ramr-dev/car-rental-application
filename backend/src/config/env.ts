@@ -26,6 +26,10 @@ const envSchema = z.object({
   RAZORPAY_KEY_ID:     z.string().min(1, 'RAZORPAY_KEY_ID is required'),
   RAZORPAY_KEY_SECRET: z.string().min(1, 'RAZORPAY_KEY_SECRET is required'),
 
+  BRAINTREE_MERCHANT_ID: z.string().min(1, 'BRAINTREE_MERCHANT_ID is required'),
+  BRAINTREE_PUBLIC_KEY:  z.string().min(1, 'BRAINTREE_PUBLIC_KEY is required'),
+  BRAINTREE_PRIVATE_KEY: z.string().min(1, 'BRAINTREE_PRIVATE_KEY is required'),
+
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_PHONE_NUMBER: z.string().optional(),

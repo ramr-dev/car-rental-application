@@ -12,8 +12,8 @@ export const FREE_CANCEL_HOURS = 48;
 export const EV_MIN_RETURN_CHARGE = 70;
 
 export const PRICE_RANGE_MIN = 0;
-export const PRICE_RANGE_MAX = 400;
-export const PRICE_RANGE_STEP = 10;
+export const PRICE_RANGE_MAX = 10000;
+export const PRICE_RANGE_STEP = 50;
 export const VEHICLES_PER_PAGE = 6;
 
 export const VEHICLE_TYPES: VehicleType[] = [

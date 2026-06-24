@@ -3,11 +3,13 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { AppError } from './error.middleware.js';
 
+import type { UserRole } from '@prisma/client';
+
 // ─── JWT payload shape ─────────────────────────────────────────────────────
 
 export interface JwtPayload {
   userId: number;
-  role: 'CUSTOMER' | 'ADMIN';
+  role: UserRole;
 }
 
 // Augment Express Request so req.user is typed everywhere

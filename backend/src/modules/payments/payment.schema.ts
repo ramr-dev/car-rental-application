@@ -16,6 +16,7 @@ export const createCheckoutSchema = z.object({
   licenseExpiry:   z.string().min(1, 'License expiry date is required'),
   licenseCountry:  z.string().min(2).max(100).trim(),
   notes:           z.string().max(1000).trim().optional(),
+  hasDamageProtection: z.preprocess((val) => val === 'true' || val === true || val === 1 || val === '1', z.boolean()).optional(),
 }).refine(
   (data) => new Date(data.endDate) > new Date(data.startDate),
   { message: 'End date must be after start date', path: ['endDate'] },

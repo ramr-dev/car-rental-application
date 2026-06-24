@@ -19,6 +19,8 @@ import { offerRouter } from './modules/offers/offer.routes.js';
 import { reviewRouter } from './modules/reviews/reviews.routes.js';
 import { gpsRouter } from './modules/gps/gps.routes.js';
 import { razorpayRouter } from './modules/razorpay/razorpay.routes.js';
+import { braintreeRouter } from './modules/braintree/braintree.routes.js';
+import { hostRouter } from './modules/hosts/host.routes.js';
 
 // ─── App factory ──────────────────────────────────────────────────────────
 // Returns a configured Express application.
@@ -93,6 +95,8 @@ export function createApp() {
   app.use('/api/reviews',  reviewRouter);
   app.use('/api/gps',      gpsRouter);
   app.use('/api/razorpay', razorpayRouter);
+  app.use('/api/braintree', braintreeRouter);
+  app.use('/api/hosts', hostRouter);
 
   // ── 404 handler ──────────────────────────────────────────────────────────
   app.use((_req, res) => {

@@ -52,7 +52,7 @@ interface Payment {
 const PAYMENT_METHODS = [
   "Visa •• 4242",
   "MC •• 8821",
-  "PayPal",
+  "Braintree",
   "Apple Pay",
   "Amex •• 0001",
   "Google Pay",

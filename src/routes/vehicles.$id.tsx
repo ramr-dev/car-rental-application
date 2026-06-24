@@ -179,12 +179,17 @@ function VehicleDetails() {
             {/* Header */}
             <div className="mt-8 flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm text-muted-foreground">
-                  {vehicle.brand} • {vehicle.year} •{" "}
-                  <Badge variant="secondary" className="ml-1 capitalize">
+                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  <span>{vehicle.brand} • {vehicle.year}</span>
+                  <Badge variant="secondary" className="capitalize">
                     {vehicle.type}
                   </Badge>
-                </p>
+                  {vehicle.host && (
+                    <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-semibold py-0.5 px-2 rounded-full">
+                      Hosted by {vehicle.host.name}
+                    </Badge>
+                  )}
+                </div>
                 <h1 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">
                   {vehicle.name}
                 </h1>
@@ -228,8 +233,21 @@ function VehicleDetails() {
                 <TabsTrigger value="reviews">Reviews</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="overview" className="mt-6">
+              <TabsContent value="overview" className="mt-6 space-y-6">
                 <p className="leading-relaxed text-muted-foreground">{vehicle.description}</p>
+                {vehicle.host && (
+                  <div className="mt-6 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex items-center gap-4">
+                    <Avatar className="h-12 w-12 border border-emerald-500/20 bg-emerald-500/10">
+                      <AvatarFallback className="text-emerald-700 dark:text-emerald-400 font-bold">
+                        {vehicle.host.name.split(" ").map((n: string) => n[0]).join("").toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h4 className="font-semibold text-sm">Hosted by {vehicle.host.name}</h4>
+                      <p className="text-xs text-muted-foreground mt-0.5">Verified Host Partner • {vehicle.host.email}</p>
+                    </div>
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="features" className="mt-6">

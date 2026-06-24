@@ -7,6 +7,7 @@ import { getActiveForPricing, bestDiscount } from '../offers/offer.service.js';
 import { createBookingPaidNotification } from '../notifications/notification.service.js';
 import type { CreateCheckoutInput, CreateIntentInput, VerifyIntentInput } from './payment.schema.js';
 import { twilioService } from '../../services/twilio.service.js';
+import { createHostEarningIfP2P } from '../hosts/host.service.js';
 
 // ─── Stripe client ─────────────────────────────────────────────────────────
 
@@ -25,12 +26,12 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-function calcPricing(pricePerDay: number, hours: number, discountPercent = 0) {
+function calcPricing(pricePerDay: number, hours: number, discountPercent = 0, addonTotal = 0) {
   if (hours < 12) {
     const subtotal   = round2((pricePerDay / 12) * hours);
     const serviceFee = round2(subtotal * SERVICE_FEE_RATE);
-    const taxAmount  = round2((subtotal + serviceFee) * TAX_RATE);
-    const totalPrice = round2(subtotal + serviceFee + taxAmount);
+    const taxAmount  = round2((subtotal + serviceFee + addonTotal) * TAX_RATE);
+    const totalPrice = round2(subtotal + serviceFee + addonTotal + taxAmount);
     return { subtotal, serviceFee, taxAmount, totalPrice };
   }
 
@@ -39,16 +40,16 @@ function calcPricing(pricePerDay: number, hours: number, discountPercent = 0) {
   const discountAmt = round2(base * (discountPercent / 100));
   const subtotal    = round2(base - discountAmt);
   const serviceFee  = round2(subtotal * SERVICE_FEE_RATE);
-  const taxAmount   = round2((subtotal + serviceFee) * TAX_RATE);
-  const totalPrice  = round2(subtotal + serviceFee + taxAmount);
+  const taxAmount   = round2((subtotal + serviceFee + addonTotal) * TAX_RATE);
+  const totalPrice  = round2(subtotal + serviceFee + addonTotal + taxAmount);
   return { subtotal, serviceFee, taxAmount, totalPrice };
 }
 
-async function pricingWithOffers(pricePerDay: number, hours: number) {
+async function pricingWithOffers(pricePerDay: number, hours: number, addonTotal = 0) {
   const activeOffers = await getActiveForPricing();
   const days         = hours < 12 ? 0 : Math.max(1, Math.ceil(hours / 24));
   const discPct      = bestDiscount(days, activeOffers);
-  return calcPricing(pricePerDay, hours, discPct);
+  return calcPricing(pricePerDay, hours, discPct, addonTotal);
 }
 
 function rentalDurationLabel(hours: number): string {
@@ -152,7 +153,8 @@ export async function createCheckoutSession(
 
   // 3. Calculate price server-side (hourly: pricePerDay = 12-hour base rate)
   const hours   = calcRentalHours(startDate, endDate);
-  const pricing = await pricingWithOffers(Number(vehicle.pricePerDay), hours);
+  const addonTotal = input.hasDamageProtection ? 200 : 0;
+  const pricing = await pricingWithOffers(Number(vehicle.pricePerDay), hours, addonTotal);
 
   // 4. Build Stripe metadata (max 500 chars per value)
   const metadata: Record<string, string> = {
@@ -172,6 +174,7 @@ export async function createCheckoutSession(
     subtotal:        String(pricing.subtotal),
     serviceFee:      String(pricing.serviceFee),
     taxAmount:       String(pricing.taxAmount),
+    hasDamageProtection: String(!!input.hasDamageProtection),
   };
   if (input.notes) metadata.notes = input.notes.slice(0, 490);
 
@@ -261,8 +264,10 @@ export async function verifyAndCreate(sessionId: string, userId: number) {
   }
 
   // 7. Re-calculate price server-side and verify Stripe charged the right amount
+  const hasDamageProtection = meta.hasDamageProtection === 'true';
   const hours    = calcRentalHours(startDate, endDate);
-  const pricing  = await pricingWithOffers(Number(vehicle.pricePerDay), hours);
+  const addonTotal = hasDamageProtection ? 200 : 0;
+  const pricing  = await pricingWithOffers(Number(vehicle.pricePerDay), hours, addonTotal);
   const expected = Math.round(pricing.totalPrice * 100);
   const charged  = session.amount_total ?? 0;
 
@@ -283,6 +288,11 @@ export async function verifyAndCreate(sessionId: string, userId: number) {
   const collision = await prisma.booking.findUnique({ where: { id: bookingId } });
   if (collision) bookingId = generateBookingId();
 
+  let finalNotes = meta.notes || null;
+  if (hasDamageProtection) {
+    finalNotes = finalNotes ? `[Accidental Damage Protection Selected]\n${finalNotes}` : `[Accidental Damage Protection Selected]`;
+  }
+
   // 10. Create the booking
   const booking = await prisma.booking.create({
     data: {
@@ -301,7 +311,7 @@ export async function verifyAndCreate(sessionId: string, userId: number) {
       licenseNumber:         meta.licenseNumber,
       licenseExpiry:         new Date(meta.licenseExpiry),
       licenseCountry:        meta.licenseCountry,
-      notes:                 meta.notes || null,
+      notes:                 finalNotes,
       rentalDays:            Math.ceil(hours), // stores rental hours
       subtotal:              pricing.subtotal,
       serviceFee:            pricing.serviceFee,
@@ -324,6 +334,8 @@ export async function verifyAndCreate(sessionId: string, userId: number) {
     booking.vehicle.name,
     pricing.totalPrice,
   ).catch(() => {});
+
+  createHostEarningIfP2P(booking.id).catch(() => {});
 
   // Send Twilio SMS confirmation gracefully
   if (booking.customerPhone) {
@@ -367,7 +379,8 @@ export async function createPaymentIntent(
   }
 
   const hours   = calcRentalHours(startDate, endDate);
-  const pricing = await pricingWithOffers(Number(vehicle.pricePerDay), hours);
+  const addonTotal = input.hasDamageProtection ? 200 : 0;
+  const pricing = await pricingWithOffers(Number(vehicle.pricePerDay), hours, addonTotal);
 
   const metadata: Record<string, string> = {
     userId:          String(userId),
@@ -386,6 +399,7 @@ export async function createPaymentIntent(
     subtotal:        String(pricing.subtotal),
     serviceFee:      String(pricing.serviceFee),
     taxAmount:       String(pricing.taxAmount),
+    hasDamageProtection: String(!!input.hasDamageProtection),
   };
   if (input.notes) metadata.notes = input.notes.slice(0, 490);
 
@@ -454,8 +468,10 @@ export async function verifyAndCreateFromIntent(
     );
   }
 
+  const hasDamageProtection = meta.hasDamageProtection === 'true';
   const hours    = calcRentalHours(startDate, endDate);
-  const pricing  = await pricingWithOffers(Number(vehicle.pricePerDay), hours);
+  const addonTotal = hasDamageProtection ? 200 : 0;
+  const pricing  = await pricingWithOffers(Number(vehicle.pricePerDay), hours, addonTotal);
   const expected = Math.round(pricing.totalPrice * 100);
   const charged  = intent.amount_received ?? 0;
 
@@ -466,6 +482,11 @@ export async function verifyAndCreateFromIntent(
   let bookingId = generateBookingId();
   const collision = await prisma.booking.findUnique({ where: { id: bookingId } });
   if (collision) bookingId = generateBookingId();
+
+  let finalNotes = meta.notes || null;
+  if (hasDamageProtection) {
+    finalNotes = finalNotes ? `[Accidental Damage Protection Selected]\n${finalNotes}` : `[Accidental Damage Protection Selected]`;
+  }
 
   const booking = await prisma.booking.create({
     data: {
@@ -484,7 +505,7 @@ export async function verifyAndCreateFromIntent(
       licenseNumber:         meta.licenseNumber,
       licenseExpiry:         new Date(meta.licenseExpiry),
       licenseCountry:        meta.licenseCountry,
-      notes:                 meta.notes || null,
+      notes:                 finalNotes,
       rentalDays:            Math.ceil(hours), // stores rental hours
       subtotal:              pricing.subtotal,
       serviceFee:            pricing.serviceFee,
@@ -506,6 +527,8 @@ export async function verifyAndCreateFromIntent(
     booking.vehicle.name,
     pricing.totalPrice,
   ).catch(() => {});
+
+  createHostEarningIfP2P(booking.id).catch(() => {});
 
   // Send Twilio SMS confirmation gracefully
   if (booking.customerPhone) {

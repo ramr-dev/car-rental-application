@@ -14,7 +14,7 @@ export const kycIdParamSchema = z.object({
 
 export const userListQuerySchema = z.object({
   search:    z.string().trim().optional(),
-  role:      z.enum(['CUSTOMER', 'ADMIN']).optional(),
+  role:      z.enum(['CUSTOMER', 'ADMIN', 'HOST']).optional(),
   kycStatus: z.enum(['NOT_STARTED', 'PENDING', 'APPROVED', 'REJECTED']).optional(),
   isBlocked: z
     .enum(['true', 'false'])

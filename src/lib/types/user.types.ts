@@ -7,8 +7,9 @@ export interface User {
   email: string;
   phone?: string;
   avatar?: string;
-  role: "user" | "admin";
+  role: "user" | "admin" | "host";
   kycStatus: KycStatus;
+  hostStatus?: "NOT_A_HOST" | "PENDING_KYC" | "VERIFIED" | "REJECTED";
   isBlocked?: boolean;
   createdAt?: string;
   bookingCount?: number;

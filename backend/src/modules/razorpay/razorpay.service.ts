@@ -8,6 +8,7 @@ import { getActiveForPricing, bestDiscount } from '../offers/offer.service.js';
 import { createBookingPaidNotification } from '../notifications/notification.service.js';
 import { twilioService } from '../../services/twilio.service.js';
 import type { CreateRazorpayOrderInput, VerifyRazorpayInput } from './razorpay.schema.js';
+import { createHostEarningIfP2P } from '../hosts/host.service.js';
 
 // ─── Razorpay client ───────────────────────────────────────────────────────
 
@@ -30,12 +31,12 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-function calcPricing(pricePerDay: number, hours: number, discountPercent = 0) {
+function calcPricing(pricePerDay: number, hours: number, discountPercent = 0, addonTotal = 0) {
   if (hours < 12) {
     const subtotal   = round2((pricePerDay / 12) * hours);
     const serviceFee = round2(subtotal * SERVICE_FEE_RATE);
-    const taxAmount  = round2((subtotal + serviceFee) * TAX_RATE);
-    const totalPrice = round2(subtotal + serviceFee + taxAmount);
+    const taxAmount  = round2((subtotal + serviceFee + addonTotal) * TAX_RATE);
+    const totalPrice = round2(subtotal + serviceFee + addonTotal + taxAmount);
     return { subtotal, serviceFee, taxAmount, totalPrice };
   }
 
@@ -44,16 +45,16 @@ function calcPricing(pricePerDay: number, hours: number, discountPercent = 0) {
   const discountAmt = round2(base * (discountPercent / 100));
   const subtotal    = round2(base - discountAmt);
   const serviceFee  = round2(subtotal * SERVICE_FEE_RATE);
-  const taxAmount   = round2((subtotal + serviceFee) * TAX_RATE);
-  const totalPrice  = round2(subtotal + serviceFee + taxAmount);
+  const taxAmount   = round2((subtotal + serviceFee + addonTotal) * TAX_RATE);
+  const totalPrice  = round2(subtotal + serviceFee + addonTotal + taxAmount);
   return { subtotal, serviceFee, taxAmount, totalPrice };
 }
 
-async function pricingWithOffers(pricePerDay: number, hours: number) {
+async function pricingWithOffers(pricePerDay: number, hours: number, addonTotal = 0) {
   const activeOffers = await getActiveForPricing();
   const days         = hours < 12 ? 0 : Math.max(1, Math.ceil(hours / 24));
   const discPct      = bestDiscount(days, activeOffers);
-  return calcPricing(pricePerDay, hours, discPct);
+  return calcPricing(pricePerDay, hours, discPct, addonTotal);
 }
 
 function rentalDurationLabel(hours: number): string {
@@ -155,7 +156,8 @@ export async function createOrder(
 
   // 3. Calculate pricing
   const hours   = calcRentalHours(startDate, endDate);
-  const pricing = await pricingWithOffers(Number(vehicle.pricePerDay), hours);
+  const addonTotal = input.hasDamageProtection ? 200 : 0;
+  const pricing = await pricingWithOffers(Number(vehicle.pricePerDay), hours, addonTotal);
 
   // 4. Convert USD → INR (paise)
   const amountINR   = Math.round(pricing.totalPrice * USD_TO_INR);
@@ -183,6 +185,7 @@ export async function createOrder(
       serviceFee:      String(pricing.serviceFee),
       taxAmount:       String(pricing.taxAmount),
       totalUSD:        String(pricing.totalPrice),
+      hasDamageProtection: String(!!input.hasDamageProtection),
       ...(input.notes ? { notes: input.notes.slice(0, 254) } : {}),
     },
   });
@@ -263,13 +266,20 @@ export async function verifyAndCreate(
   }
 
   // 7. Re-calculate pricing
+  const hasDamageProtection = notes.hasDamageProtection === 'true';
   const hours   = calcRentalHours(startDate, endDate);
-  const pricing = await pricingWithOffers(Number(vehicle.pricePerDay), hours);
+  const addonTotal = hasDamageProtection ? 200 : 0;
+  const pricing = await pricingWithOffers(Number(vehicle.pricePerDay), hours, addonTotal);
 
   // 8. Generate unique booking ID
   let bookingId = generateBookingId();
   const collision = await prisma.booking.findUnique({ where: { id: bookingId } });
   if (collision) bookingId = generateBookingId();
+
+  let finalNotes = notes.notes || null;
+  if (hasDamageProtection) {
+    finalNotes = finalNotes ? `[Accidental Damage Protection Selected]\n${finalNotes}` : `[Accidental Damage Protection Selected]`;
+  }
 
   // 9. Create the booking — store razorpay_order_id in stripeSessionId field,
   //    and razorpay_payment_id in stripePaymentIntentId field for traceability.
@@ -290,7 +300,7 @@ export async function verifyAndCreate(
       licenseNumber:         notes.licenseNumber,
       licenseExpiry:         new Date(notes.licenseExpiry),
       licenseCountry:        notes.licenseCountry,
-      notes:                 notes.notes || null,
+      notes:                 finalNotes,
       rentalDays:            Math.ceil(hours),
       subtotal:              pricing.subtotal,
       serviceFee:            pricing.serviceFee,
@@ -313,6 +323,8 @@ export async function verifyAndCreate(
     booking.vehicle.name,
     pricing.totalPrice,
   ).catch(() => {});
+
+  createHostEarningIfP2P(booking.id).catch(() => {});
 
   if (booking.customerPhone) {
     twilioService.sendBookingConfirmationSMS({

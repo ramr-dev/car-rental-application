@@ -14,6 +14,7 @@ export interface CheckoutInput {
   licenseExpiry: string;
   licenseCountry: string;
   notes?: string;
+  hasDamageProtection?: boolean;
 }
 
 export const paymentService = {
@@ -43,8 +44,8 @@ export const paymentService = {
   },
 
   // Get the currently active payment gateway from admin config.
-  getActiveGateway: async (): Promise<'stripe' | 'razorpay'> => {
-    const res = await api.get<{ gateway: 'stripe' | 'razorpay' }>("/payments/gateway");
+  getActiveGateway: async (): Promise<'stripe' | 'razorpay' | 'braintree'> => {
+    const res = await api.get<{ gateway: 'stripe' | 'razorpay' | 'braintree' }>("/payments/gateway");
     return res.data.gateway;
   },
 };

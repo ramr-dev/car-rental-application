@@ -1,7 +1,9 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 interface BookingDraft {
   vehicleId?: string;
+  step?: number;
   // Step 1 — Trip details
   startDate?: string;
   endDate?: string;
@@ -28,12 +30,19 @@ interface BookingState {
   resetTrip: () => void;
 }
 
-export const useBookingDraft = create<BookingState>((set, get) => ({
-  draft: { addons: [] },
-  setDraft: (patch) => set((s) => ({ draft: { ...s.draft, ...patch } })),
-  reset: () => set({ draft: { addons: [] } }),
-  resetTrip: () => {
-    const { fullName, email, phone } = get().draft;
-    set({ draft: { addons: [], fullName, email, phone } });
-  },
-}));
+export const useBookingDraft = create<BookingState>()(
+  persist(
+    (set, get) => ({
+      draft: { addons: [], step: 0 },
+      setDraft: (patch) => set((s) => ({ draft: { ...s.draft, ...patch } })),
+      reset: () => set({ draft: { addons: [], step: 0 } }),
+      resetTrip: () => {
+        const { fullName, email, phone } = get().draft;
+        set({ draft: { addons: [], step: 0, fullName, email, phone } });
+      },
+    }),
+    {
+      name: "drivelux-booking-draft",
+    },
+  ),
+);

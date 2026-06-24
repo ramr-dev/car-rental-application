@@ -1,5 +1,5 @@
 import { useForm, useWatch } from "react-hook-form";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { ImagePlus, X, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -207,6 +207,9 @@ function VehicleFormFields({
   defaultTransmission?: Transmission;
 }) {
   const imageValue = useWatch({ control, name: "image" });
+  const typeValue = useWatch({ control, name: "type" });
+  const fuelValue = useWatch({ control, name: "fuel" });
+  const transmissionValue = useWatch({ control, name: "transmission" });
 
   return (
     <div className="space-y-4">
@@ -242,7 +245,7 @@ function VehicleFormFields({
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
           <Label>Category</Label>
-          <Select defaultValue={defaultType ?? "sedan"} onValueChange={(v) => setValue("type", v as VehicleType)}>
+          <Select value={typeValue || defaultType || "sedan"} onValueChange={(v) => setValue("type", v as VehicleType)}>
             <SelectTrigger className="mt-1 w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {VEHICLE_TYPES.map((t) => (
@@ -253,7 +256,7 @@ function VehicleFormFields({
         </div>
         <div>
           <Label>Fuel</Label>
-          <Select defaultValue={defaultFuel ?? "petrol"} onValueChange={(v) => setValue("fuel", v as FuelType)}>
+          <Select value={fuelValue || defaultFuel || "petrol"} onValueChange={(v) => setValue("fuel", v as FuelType)}>
             <SelectTrigger className="mt-1 w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {FUEL_TYPES.map((f) => (
@@ -264,7 +267,7 @@ function VehicleFormFields({
         </div>
         <div>
           <Label>Transmission</Label>
-          <Select defaultValue={defaultTransmission ?? "automatic"} onValueChange={(v) => setValue("transmission", v as Transmission)}>
+          <Select value={transmissionValue || defaultTransmission || "automatic"} onValueChange={(v) => setValue("transmission", v as Transmission)}>
             <SelectTrigger className="mt-1 w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {TRANSMISSIONS.map((t) => (
@@ -366,7 +369,7 @@ interface EditProps {
 }
 
 export function EditVehicleDialog({ vehicle, onOpenChange, onSubmit, isPending }: EditProps) {
-  const { register, handleSubmit, setValue, control } = useForm<VehicleFormVals>({
+  const { register, handleSubmit, setValue, control, reset } = useForm<VehicleFormVals>({
     defaultValues: vehicle
       ? {
           name:         vehicle.name,
@@ -388,6 +391,29 @@ export function EditVehicleDialog({ vehicle, onOpenChange, onSubmit, isPending }
         }
       : undefined,
   });
+
+  useEffect(() => {
+    if (vehicle) {
+      reset({
+        name:         vehicle.name,
+        brand:        vehicle.brand,
+        model:        vehicle.model,
+        year:         vehicle.year,
+        type:         vehicle.type,
+        fuel:         vehicle.fuel,
+        transmission: vehicle.transmission,
+        seats:        vehicle.seats,
+        pricePerDay:  vehicle.pricePerDay,
+        location:     vehicle.location,
+        image:        vehicle.image ?? "",
+        description:  vehicle.description ?? "",
+        mileage:      vehicle.specs?.mileage ?? "",
+        engine:       vehicle.specs?.engine ?? "",
+        topSpeed:     vehicle.specs?.topSpeed ?? "",
+        acceleration: vehicle.specs?.acceleration ?? "",
+      });
+    }
+  }, [vehicle, reset]);
 
   if (!vehicle) return null;
 

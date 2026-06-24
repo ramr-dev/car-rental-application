@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { bookingService, vehicleService, userService } from "@/lib/api";
 import { useChartStyles } from "@/hooks/useChartStyles";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/reports")({ component: AdminReports });
 
@@ -98,6 +99,27 @@ function AdminReports() {
   const { data: users = [] } = useQuery({ queryKey: ["users"], queryFn: () => userService.list() });
   const css = useChartStyles();
 
+  const handleExportAll = () => {
+    downloadCSV(revenueMonthly, "revenue_monthly_report.csv");
+    setTimeout(() => downloadCSV(bookingTrend, "booking_volume_trend.csv"), 100);
+    setTimeout(() => downloadCSV(vehiclePerformance, "vehicle_performance_report.csv"), 200);
+    if (bookings.length > 0) {
+      setTimeout(() => downloadCSV(
+        bookings.map(b => ({
+          id: b.id,
+          customerName: b.customerName,
+          vehicleName: b.vehicleName,
+          startDate: b.startDate,
+          endDate: b.endDate,
+          totalPrice: b.totalPrice,
+          status: b.status
+        })),
+        "all_bookings.csv"
+      ), 300);
+    }
+    toast.success("All reports exported successfully!");
+  };
+
   // Derived stats from real data
   const totalRevenue = bookings.filter((b) => b.status === "completed").reduce((s, b) => s + b.totalPrice, 0);
   const pendingBookings = bookings.filter((b) => b.status === "pending").length;
@@ -115,7 +137,7 @@ function AdminReports() {
             Platform-wide performance data across revenue, bookings, vehicles, and customers.
           </p>
         </div>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={handleExportAll}>
           <Download className="mr-2 h-4 w-4" /> Export All Reports
         </Button>
       </div>
@@ -154,7 +176,9 @@ function AdminReports() {
                 <h3 className="font-display text-lg font-semibold">Revenue vs Costs</h3>
                 <p className="text-sm text-muted-foreground">Monthly breakdown (Jan–Dec)</p>
               </div>
-              <Button variant="outline" size="sm"><Download className="mr-1.5 h-3.5 w-3.5" /> CSV</Button>
+              <Button variant="outline" size="sm" onClick={() => downloadCSV(revenueMonthly, "revenue_monthly_report.csv")}>
+                <Download className="mr-1.5 h-3.5 w-3.5" /> CSV
+              </Button>
             </div>
             <div className="mt-6 h-80">
               <ResponsiveContainer width="100%" height="100%">
@@ -248,7 +272,9 @@ function AdminReports() {
                 <h3 className="font-display text-lg font-semibold">Booking Volume Trend</h3>
                 <p className="text-sm text-muted-foreground">New, completed, and cancelled bookings</p>
               </div>
-              <Button variant="outline" size="sm"><Download className="mr-1.5 h-3.5 w-3.5" /> CSV</Button>
+              <Button variant="outline" size="sm" onClick={() => downloadCSV(bookingTrend, "booking_volume_trend.csv")}>
+                <Download className="mr-1.5 h-3.5 w-3.5" /> CSV
+              </Button>
             </div>
             <div className="mt-6 h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -270,7 +296,26 @@ function AdminReports() {
           <Card className="overflow-hidden">
             <div className="flex items-center justify-between border-b border-border p-5">
               <h3 className="font-display text-lg font-semibold">Recent Bookings</h3>
-              <Button variant="outline" size="sm"><Download className="mr-1.5 h-3.5 w-3.5" /> Export</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  downloadCSV(
+                    bookings.map((b) => ({
+                      id: b.id,
+                      customerName: b.customerName,
+                      vehicleName: b.vehicleName,
+                      startDate: b.startDate,
+                      endDate: b.endDate,
+                      totalPrice: b.totalPrice,
+                      status: b.status,
+                    })),
+                    "recent_bookings.csv"
+                  )
+                }
+              >
+                <Download className="mr-1.5 h-3.5 w-3.5" /> Export
+              </Button>
             </div>
             <Table>
               <TableHeader>
@@ -322,7 +367,9 @@ function AdminReports() {
           <Card className="p-6">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-lg font-semibold">Top Performing Vehicles</h3>
-              <Button variant="outline" size="sm"><Download className="mr-1.5 h-3.5 w-3.5" /> CSV</Button>
+              <Button variant="outline" size="sm" onClick={() => downloadCSV(vehiclePerformance, "vehicle_performance_report.csv")}>
+                <Download className="mr-1.5 h-3.5 w-3.5" /> CSV
+              </Button>
             </div>
             <div className="mt-4 overflow-hidden">
               <Table>
@@ -488,4 +535,34 @@ function AdminReports() {
       </Tabs>
     </div>
   );
+}
+
+function downloadCSV(data: Array<Record<string, any>>, filename: string) {
+  if (data.length === 0) return;
+  const headers = Object.keys(data[0]);
+  const csvContent = [
+    headers.join(","),
+    ...data.map((row) =>
+      headers
+        .map((header) => {
+          const val = row[header];
+          const valStr = val === null || val === undefined ? "" : String(val);
+          if (valStr.includes(",") || valStr.includes('"') || valStr.includes("\n")) {
+            return `"${valStr.replace(/"/g, '""')}"`;
+          }
+          return valStr;
+        })
+        .join(",")
+    ),
+  ].join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }

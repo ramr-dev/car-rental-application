@@ -103,7 +103,11 @@ const vehicleInclude = {
 export async function list(caller: JwtPayload, query: BookingListQuery) {
   const where: Prisma.BookingWhereInput = {};
 
-  if (caller.role !== 'ADMIN') where.userId = caller.userId;
+  if (caller.role === 'HOST' && query.asHost) {
+    where.vehicle = { hostId: caller.userId };
+  } else if (caller.role !== 'ADMIN') {
+    where.userId = caller.userId;
+  }
   if (query.status) where.status = query.status;
 
   const skip = (query.page - 1) * query.limit;

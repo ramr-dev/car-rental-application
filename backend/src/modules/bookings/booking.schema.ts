@@ -14,6 +14,7 @@ export const bookingListQuerySchema = z.object({
     .optional(),
   page:  z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
+  asHost: z.preprocess((val) => val === 'true' || val === true, z.boolean()).optional(),
 });
 
 // ─── Create ───────────────────────────────────────────────────────────────

@@ -182,3 +182,79 @@
   .shadow-elevated { box-shadow: var(--shadow-elevated); }
   .shadow-glow { box-shadow: var(--shadow-glow); }
 }
+
+/* ── Braintree Drop-in Dark Mode Overrides ──────────────────────────────── */
+.dark .braintree-dropin,
+.dark .braintree-sheet,
+.dark .braintree-upper-container,
+.dark [data-braintree-id="wrapper"] {
+  background-color: var(--color-card) !important;
+  color: var(--color-card-foreground) !important;
+  border-color: var(--color-border) !important;
+}
+
+.dark .braintree-heading {
+  color: var(--color-foreground) !important;
+}
+
+.dark .braintree-sheet__text {
+  color: var(--color-foreground) !important;
+}
+
+.dark .braintree-method {
+  background-color: var(--color-card) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-foreground) !important;
+}
+
+.dark .braintree-method__label {
+  color: var(--color-foreground) !important;
+}
+
+.dark .braintree-methods--active .braintree-method--active {
+  border-color: var(--color-primary) !important;
+}
+
+.dark .braintree-method--active .braintree-method__check {
+  background-color: var(--color-primary) !important;
+}
+
+.dark .braintree-large-button {
+  background-color: var(--color-secondary) !important;
+  color: var(--color-secondary-foreground) !important;
+  border-color: var(--color-border) !important;
+}
+
+.dark .braintree-large-button:hover {
+  background-color: var(--color-accent) !important;
+  color: var(--color-accent-foreground) !important;
+}
+
+.dark .braintree-toggle {
+  color: var(--color-muted-foreground) !important;
+  background-color: transparent !important;
+}
+
+.dark .braintree-form__label {
+  color: var(--color-muted-foreground) !important;
+}
+
+.dark .braintree-sheet__header {
+  border-bottom: 1px solid var(--color-border) !important;
+}
+
+.dark .braintree-sheet__content--has-header {
+  background-color: var(--color-card) !important;
+}
+
+.dark .braintree-form__flexible-fields {
+  background-color: var(--color-card) !important;
+}
+
+.dark .braintree-dropin input,
+.dark .braintree-dropin select,
+.dark .braintree-dropin textarea {
+  color: var(--color-foreground) !important;
+  background-color: var(--color-input) !important;
+  border-color: var(--color-border) !important;
+}

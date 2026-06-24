@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   Elements,
@@ -20,6 +20,7 @@ import {
   Wallet,
   Smartphone,
   Building2,
+  Globe,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { vehicleService } from "@/lib/api/vehicle.service";
 import { paymentService } from "@/lib/api/payment.service";
 import { offerService } from "@/lib/api/offer.service";
+import { braintreeService } from "@/lib/api/braintree.service";
 import {
   razorpayService,
   loadRazorpayScript,
@@ -138,7 +140,7 @@ function fmtDT(dt: string | undefined): string {
 
 // ─── Gateway indicator badge ──────────────────────────────────────────────
 
-function GatewayBadge({ gateway }: { gateway: 'stripe' | 'razorpay' | null }) {
+function GatewayBadge({ gateway }: { gateway: 'stripe' | 'razorpay' | 'braintree' | null }) {
   if (gateway === 'razorpay') {
     return (
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-5 py-3 text-xs text-muted-foreground">
@@ -156,6 +158,24 @@ function GatewayBadge({ gateway }: { gateway: 'stripe' | 'razorpay' | null }) {
         </span>
         <span className="flex items-center gap-1.5">
           <Lock className="h-3.5 w-3.5 text-green-500" /> Secured by Razorpay
+        </span>
+      </div>
+    );
+  }
+  if (gateway === 'braintree') {
+    return (
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-5 py-3 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <Globe className="h-3.5 w-3.5 text-emerald-500" /> Visa / Mastercard / Amex
+        </span>
+        <span className="flex items-center gap-1.5">
+          <CreditCard className="h-3.5 w-3.5 text-emerald-500" /> Debit Cards
+        </span>
+        <span className="flex items-center gap-1.5">
+          <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> 3D Secure
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Lock className="h-3.5 w-3.5 text-emerald-500" /> Secured by Braintree
         </span>
       </div>
     );
@@ -195,7 +215,6 @@ function RazorpayCheckoutForm({
     setIsProcessing(true);
     setErrorMessage(null);
 
-    // 1. Load script
     const loaded = await loadRazorpayScript();
     if (!loaded) {
       setErrorMessage("Failed to load payment system. Please check your connection and try again.");
@@ -203,7 +222,6 @@ function RazorpayCheckoutForm({
       return;
     }
 
-    // 2. Create order on backend
     let orderData: any;
     try {
       orderData = await razorpayService.createOrder({
@@ -219,6 +237,7 @@ function RazorpayCheckoutForm({
         licenseExpiry:   draft.licenseExpiry ?? "",
         licenseCountry:  draft.licenseCountry ?? "",
         notes:           draft.notes,
+        hasDamageProtection: draft.addons?.includes("damage_protection"),
       });
     } catch (err: any) {
       const msg = err?.response?.data?.error ?? "Failed to create payment order. Please try again.";
@@ -228,7 +247,6 @@ function RazorpayCheckoutForm({
       return;
     }
 
-    // 3. Open Razorpay popup
     openRazorpayCheckout({
       orderId:       orderData.orderId,
       amount:        orderData.amount,
@@ -252,8 +270,6 @@ function RazorpayCheckoutForm({
             razorpay_signature:  response.razorpay_signature,
           });
           toast.success("Payment successful! Booking confirmed.");
-          // Navigate to success page — use href to bypass TanStack Router param validation
-          // since Razorpay flow does not use session_id query param
           window.location.href = "/booking/success?razorpay=1";
         } catch (err: any) {
           const msg = err?.response?.data?.error ?? "Payment succeeded but booking creation failed. Please contact support.";
@@ -277,7 +293,6 @@ function RazorpayCheckoutForm({
         </p>
       </div>
 
-      {/* Razorpay payment methods visual */}
       <div className="rounded-xl border border-border bg-muted/20 p-5 space-y-4">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Accepted Payment Methods</p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -297,7 +312,6 @@ function RazorpayCheckoutForm({
             </div>
           ))}
         </div>
-
         <p className="text-xs text-muted-foreground text-center">
           Clicking "Pay Now" opens the Razorpay secure checkout popup.
         </p>
@@ -337,6 +351,232 @@ function RazorpayCheckoutForm({
   );
 }
 
+// ─── Braintree Drop-in checkout form ─────────────────────────────────────
+
+function BraintreeCheckoutForm({
+  totalAmount,
+  draft,
+  vehicle,
+  isDark,
+}: {
+  totalAmount: number;
+  draft: any;
+  vehicle: any;
+  isDark: boolean;
+}) {
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isDropInReady, setIsDropInReady] = useState(false);
+  const [clientToken, setClientToken] = useState<string | null>(null);
+  const dropinInstanceRef = useRef<any>(null);
+  const dropinContainerRef = useRef<HTMLDivElement>(null);
+
+  // Fetch client token on mount
+  useEffect(() => {
+    braintreeService.getClientToken()
+      .then(setClientToken)
+      .catch(() => setErrorMessage("Failed to initialise payment. Please refresh."));
+  }, []);
+
+  // Initialise Braintree Drop-in once token is available
+  useEffect(() => {
+    if (!clientToken || !dropinContainerRef.current) return;
+
+    let active = true;
+    let instance: any = null;
+
+    // Clear any previous elements to avoid "already has a Drop-in" errors
+    dropinContainerRef.current.innerHTML = "";
+    setIsDropInReady(false);
+
+    // @ts-ignore
+    import("braintree-web-drop-in").then((dropin) => {
+      if (!active) return;
+
+      // Double-check container is still empty and present
+      if (!dropinContainerRef.current) return;
+      dropinContainerRef.current.innerHTML = "";
+
+      try {
+        dropin.default.create(
+          {
+            authorization: clientToken,
+            container: dropinContainerRef.current!,
+            card: {
+              cardholderName: { required: true },
+              overrides: {
+                styles: {
+                  input: {
+                    "font-size": "14px",
+                    "font-family": "Inter, sans-serif",
+                    color: isDark ? "#ffffff" : "#000000",
+                  },
+                  ":focus": {
+                    color: isDark ? "#ffffff" : "#000000",
+                  },
+                  ".valid": {
+                    color: isDark ? "#ffffff" : "#000000",
+                  },
+                },
+              },
+            },
+          },
+          (err: any, dropinInstance: any) => {
+            if (!active) {
+              if (dropinInstance) {
+                dropinInstance.teardown().catch(() => {});
+              }
+              return;
+            }
+            if (err) {
+              setErrorMessage("Failed to load payment form. Please refresh.");
+              return;
+            }
+            instance = dropinInstance;
+            dropinInstanceRef.current = dropinInstance;
+            setIsDropInReady(true);
+          },
+        );
+      } catch (createErr) {
+        console.error("Braintree create error:", createErr);
+        setErrorMessage("Failed to load payment form. Please refresh.");
+      }
+    });
+
+    return () => {
+      active = false;
+      dropinInstanceRef.current = null;
+      if (instance) {
+        instance.teardown().catch(() => {});
+      }
+    };
+  }, [clientToken, isDark]);
+
+  const handlePay = async () => {
+    if (!dropinInstanceRef.current) return;
+    setIsProcessing(true);
+    setErrorMessage(null);
+
+    dropinInstanceRef.current.requestPaymentMethod(async (err: any, payload: any) => {
+      if (err) {
+        setErrorMessage(err.message ?? "Please enter valid card details.");
+        setIsProcessing(false);
+        return;
+      }
+
+      try {
+        await braintreeService.checkout({
+          paymentMethodNonce: payload.nonce,
+          vehicleId:       Number(vehicle.id),
+          startDate:       draft.startDate,
+          endDate:         draft.endDate,
+          pickupLocation:  draft.pickupLocation,
+          dropoffLocation: draft.dropoffLocation || draft.pickupLocation,
+          customerName:    draft.fullName ?? "",
+          customerEmail:   draft.email ?? "",
+          customerPhone:   draft.phone ?? "",
+          licenseNumber:   draft.licenseNumber ?? "",
+          licenseExpiry:   draft.licenseExpiry ?? "",
+          licenseCountry:  draft.licenseCountry ?? "",
+          notes:           draft.notes,
+          hasDamageProtection: draft.addons?.includes("damage_protection"),
+        });
+        toast.success("Payment successful! Booking confirmed.");
+        window.location.href = "/booking/success?braintree=1";
+      } catch (err: any) {
+        const msg =
+          err?.response?.data?.error ??
+          "Payment failed. Please try again or use a different card.";
+        setErrorMessage(msg);
+        toast.error(msg);
+        setIsProcessing(false);
+      }
+    });
+  };
+
+  return (
+    <Card className="p-6 lg:p-8 space-y-6">
+      <div>
+        <h2 className="font-display text-xl font-semibold flex items-center gap-2">
+          <Globe className="h-5 w-5 text-emerald-500" />
+          Pay with Card
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Pay securely using any major credit or debit card — powered by Braintree.
+        </p>
+      </div>
+
+      {/* Accepted payment methods */}
+      <div className="rounded-xl border border-border bg-muted/20 p-5 space-y-4">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Accepted Payment Methods</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { icon: CreditCard, label: "Visa",       sub: "Credit / Debit" },
+            { icon: CreditCard, label: "Mastercard", sub: "Credit / Debit" },
+            { icon: CreditCard, label: "Amex",       sub: "Credit card" },
+            { icon: ShieldCheck, label: "3D Secure", sub: "Fraud protection" },
+          ].map(({ icon: Icon, label, sub }) => (
+            <div
+              key={label}
+              className="flex flex-col items-center gap-1.5 rounded-lg border border-border bg-background p-3 text-center transition-colors hover:border-emerald-500/40 hover:bg-emerald-500/5"
+            >
+              <Icon className="h-5 w-5 text-emerald-500" />
+              <span className="text-xs font-semibold">{label}</span>
+              <span className="text-[10px] text-muted-foreground leading-tight">{sub}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Drop-in container */}
+      {!clientToken ? (
+        <div className="flex items-center justify-center gap-3 py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
+          <span className="text-sm text-muted-foreground">Loading payment form…</span>
+        </div>
+      ) : (
+        <div
+          id="braintree-dropin-container"
+          ref={dropinContainerRef}
+          className="rounded-xl overflow-hidden"
+        />
+      )}
+
+      {errorMessage && (
+        <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>{errorMessage}</p>
+        </div>
+      )}
+
+      <Button
+        id="braintree-pay-btn"
+        size="lg"
+        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-glow"
+        onClick={handlePay}
+        disabled={!isDropInReady || isProcessing}
+      >
+        {isProcessing ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Processing payment…
+          </>
+        ) : (
+          <>
+            <Lock className="mr-2 h-4 w-4" />
+            Pay ${totalAmount.toFixed(2)} securely
+          </>
+        )}
+      </Button>
+
+      <p className="text-center text-xs text-muted-foreground">
+        Total: <span className="font-semibold text-foreground">${totalAmount.toFixed(2)}</span> USD ·
+        By completing this payment you agree to our rental terms.
+      </p>
+    </Card>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────
 
 function BookingPaymentPage() {
@@ -345,6 +585,11 @@ function BookingPaymentPage() {
   const { theme } = useTheme();
   const navigate = useNavigate();
   const isDark = theme === "dark";
+
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   const vehicleId = draft.vehicleId;
 
@@ -360,13 +605,12 @@ function BookingPaymentPage() {
     staleTime: 5 * 60_000,
   });
 
-  // Detect active gateway
+  // Detect active gateway (stripe | razorpay | braintree)
   const { data: activeGateway, isLoading: gatewayLoading } = useQuery({
     queryKey: ["active-gateway"],
     queryFn: paymentService.getActiveGateway,
     staleTime: 30_000,
     retry: 1,
-    // Default to stripe if the call fails (e.g., not logged in as admin)
   });
 
   const gateway = activeGateway ?? "stripe";
@@ -394,6 +638,7 @@ function BookingPaymentPage() {
         licenseExpiry:   draft.licenseExpiry ?? "",
         licenseCountry:  draft.licenseCountry ?? "",
         notes:           draft.notes,
+        hasDamageProtection: draft.addons?.includes("damage_protection"),
       });
       setClientSecret(cs);
     } catch (err: any) {
@@ -406,9 +651,21 @@ function BookingPaymentPage() {
   }, [vehicle, draft]);
 
   useEffect(() => {
-    if (!user) { navigate({ to: "/login" }); return; }
-    if (!vehicleId || !draft.startDate) { window.location.href = "/vehicles"; return; }
-  }, [user, vehicleId, draft.startDate, navigate]);
+    if (!hasMounted) return;
+
+    const raw = localStorage.getItem("drivelux-auth");
+    const storedUser = raw ? JSON.parse(raw)?.state?.user : null;
+
+    if (!storedUser && !user) {
+      navigate({ to: "/login" });
+      return;
+    }
+
+    if (!vehicleId || !draft.startDate) {
+      window.location.href = "/vehicles";
+      return;
+    }
+  }, [hasMounted, user, vehicleId, draft.startDate, navigate]);
 
   // Only create Stripe intent if Stripe is the active gateway
   useEffect(() => {
@@ -416,6 +673,14 @@ function BookingPaymentPage() {
       createIntent();
     }
   }, [gateway, vehicle, clientSecret, intentLoading, intentError, createIntent]);
+
+  if (!hasMounted) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   if (!vehicleId || !draft.startDate) return null;
 
@@ -425,7 +690,15 @@ function BookingPaymentPage() {
       : 12;
 
   const pricing = vehicle
-    ? calcBookingTotal(vehicle.pricePerDay, rentalHours, 0, SERVICE_FEE_RATE, TAX_RATE, SECURITY_DEPOSIT, activeOffers)
+    ? calcBookingTotal(
+        vehicle.pricePerDay,
+        rentalHours,
+        draft.addons?.includes("damage_protection") ? 200 : 0,
+        SERVICE_FEE_RATE,
+        TAX_RATE,
+        SECURITY_DEPOSIT,
+        activeOffers
+      )
     : null;
 
   const isLoading = vehicleLoading || gatewayLoading || (gateway === "stripe" && intentLoading);
@@ -453,7 +726,7 @@ function BookingPaymentPage() {
                 <p className="mt-1 text-sm text-muted-foreground">
                   Your payment is processed securely via{" "}
                   <span className="font-medium text-foreground">
-                    {gateway === "razorpay" ? "Razorpay" : "Stripe"}
+                    {gateway === "razorpay" ? "Razorpay" : gateway === "braintree" ? "Braintree" : "Stripe"}
                   </span>.
                 </p>
               </div>
@@ -462,10 +735,12 @@ function BookingPaymentPage() {
                 className={
                   gateway === "razorpay"
                     ? "border-blue-500/40 bg-blue-500/10 text-blue-500"
+                    : gateway === "braintree"
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                     : "border-primary/40 bg-primary/10 text-primary"
                 }
               >
-                {gateway === "razorpay" ? "🇮🇳 UPI + Cards" : "💳 International Cards"}
+                {gateway === "razorpay" ? "🇮🇳 UPI + Cards" : gateway === "braintree" ? "🌐 International" : "💳 International Cards"}
               </Badge>
             </div>
 
@@ -480,6 +755,14 @@ function BookingPaymentPage() {
             ) : gateway === "razorpay" ? (
               /* ── Razorpay form ─────────────────────────────────────── */
               <RazorpayCheckoutForm
+                totalAmount={pricing?.total ?? 0}
+                draft={draft}
+                vehicle={vehicle}
+                isDark={isDark}
+              />
+            ) : gateway === "braintree" ? (
+              /* ── Braintree Drop-in ─────────────────────────────────── */
+              <BraintreeCheckoutForm
                 totalAmount={pricing?.total ?? 0}
                 draft={draft}
                 vehicle={vehicle}
@@ -610,6 +893,12 @@ function BookingPaymentPage() {
                               )}
                             </>
                           )}
+                          {draft.addons?.includes("damage_protection") && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Damage Protection</span>
+                              <span>$200</span>
+                            </div>
+                          )}
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Service fee (12%)</span>
                             <span>${pricing.fees}</span>
@@ -627,6 +916,12 @@ function BookingPaymentPage() {
                             <div className="flex justify-between text-xs text-muted-foreground">
                               <span>Approx. in INR</span>
                               <span>≈ ₹{Math.round(pricing.total * 83).toLocaleString("en-IN")}</span>
+                            </div>
+                          )}
+                          {gateway === "braintree" && (
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>Currency</span>
+                              <span>USD (no conversion)</span>
                             </div>
                           )}
                           <p className="text-xs text-muted-foreground">

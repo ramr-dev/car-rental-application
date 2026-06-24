@@ -32,7 +32,14 @@ export function VehicleCard({ vehicle, variant = "grid" }: { vehicle: Vehicle; v
         <div className="flex flex-1 flex-col p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">{vehicle.brand} • {vehicle.year}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">{vehicle.brand} • {vehicle.year}</p>
+                {vehicle.host && (
+                  <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold py-0.5 px-1.5 rounded">
+                    Hosted by {vehicle.host.name}
+                  </Badge>
+                )}
+              </div>
               <h3 className="mt-1 font-display text-xl font-semibold">{vehicle.name}</h3>
             </div>
             <div className="flex items-center gap-1 text-sm">
@@ -90,7 +97,14 @@ export function VehicleCard({ vehicle, variant = "grid" }: { vehicle: Vehicle; v
       <div className="flex flex-1 flex-col p-5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">{vehicle.brand}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">{vehicle.brand}</p>
+              {/* {vehicle.host && (
+                <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[9px] font-semibold py-0.5 px-1.5 rounded h-fit">
+                  Hosted by {vehicle.host.name}
+                </Badge>
+              )} */}
+            </div>
             <h3 className="mt-1 truncate font-display text-lg font-semibold">{vehicle.name}</h3>
           </div>
           <div className="flex shrink-0 items-center gap-1 text-sm">

@@ -14,7 +14,27 @@ import type {
 //   - Decimal pricePerDay → number
 //   - type/fuel/transmission lowercased to match frontend enums
 
-type PrismaVehicle = Prisma.VehicleGetPayload<Record<string, never>>;
+type PrismaVehicle = Prisma.VehicleGetPayload<{
+  include: {
+    host: {
+      select: { id: true; name: true; email: true };
+    };
+  };
+}>;
+
+function parseJsonArray(val: any): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      return Array.isArray(parsed) ? parsed : (typeof parsed === 'string' ? JSON.parse(parsed) : []);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
 function toVehicleResponse(v: PrismaVehicle) {
   return {
@@ -32,8 +52,8 @@ function toVehicleResponse(v: PrismaVehicle) {
     reviewCount:  v.reviewCount,
     location:     v.location,
     image:        v.image,
-    images:       v.images as string[],
-    features:     v.features as string[],
+    images:       parseJsonArray(v.images),
+    features:     parseJsonArray(v.features),
     available:    v.available,
     description:  v.description,
     specs: {
@@ -46,6 +66,12 @@ function toVehicleResponse(v: PrismaVehicle) {
     latitude:     v.latitude ? Number(v.latitude) : null,
     longitude:    v.longitude ? Number(v.longitude) : null,
     gpsLastSeen:  v.gpsLastSeen?.toISOString() ?? null,
+    // Host Info
+    host: v.host ? {
+      id: String(v.host.id),
+      name: v.host.name,
+      email: v.host.email,
+    } : null,
   };
 }
 
@@ -83,7 +109,17 @@ export async function list(query: VehicleListQuery) {
   const skip = (query.page - 1) * query.limit;
 
   const [vehicles, total] = await Promise.all([
-    prisma.vehicle.findMany({ where, orderBy, skip, take: query.limit }),
+    prisma.vehicle.findMany({
+      where,
+      orderBy,
+      skip,
+      take: query.limit,
+      include: {
+        host: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    }),
     prisma.vehicle.count({ where }),
   ]);
 
@@ -101,7 +137,14 @@ export async function list(query: VehicleListQuery) {
 // ─── getById ───────────────────────────────────────────────────────────────
 
 export async function getById(id: number) {
-  const vehicle = await prisma.vehicle.findUnique({ where: { id } }); 
+  const vehicle = await prisma.vehicle.findUnique({
+    where: { id },
+    include: {
+      host: {
+        select: { id: true, name: true, email: true },
+      },
+    },
+  }); 
   if (!vehicle) throw new AppError(404, 'Vehicle not found.', 'NOT_FOUND');
   return toVehicleResponse(vehicle);
 }
@@ -131,6 +174,11 @@ export async function create(input: CreateVehicleInput) {
       topSpeed:     input.specs.topSpeed,
       acceleration: input.specs.acceleration,
     },
+    include: {
+      host: {
+        select: { id: true, name: true, email: true },
+      },
+    },
   });
 
   return toVehicleResponse(vehicle);
@@ -154,6 +202,11 @@ export async function update(id: number, input: UpdateVehicleInput) {
         topSpeed:     specs.topSpeed,
         acceleration: specs.acceleration,
       }),
+    },
+    include: {
+      host: {
+        select: { id: true, name: true, email: true },
+      },
     },
   });
 

@@ -48,6 +48,22 @@ export function Navbar() {
               {l.label}
             </Link>
           ))}
+          {(!user || (user.role !== "admin" && user.role !== "host")) && (
+            <Link
+              to="/host/register"
+              className={`text-sm font-semibold text-primary hover:text-primary/80 transition-colors`}
+            >
+              Become a Host
+            </Link>
+          )}
+          {user && user.role === "host" && (
+            <Link
+              to="/host/dashboard"
+              className={`text-sm font-semibold text-primary hover:text-primary/80 transition-colors`}
+            >
+              Host Dashboard
+            </Link>
+          )}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -73,6 +89,11 @@ export function Navbar() {
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild><Link to="/dashboard">Dashboard</Link></DropdownMenuItem>
+                {user.role === "host" ? (
+                  <DropdownMenuItem asChild><Link to="/host/dashboard">Host Dashboard</Link></DropdownMenuItem>
+                ) : user.role !== "admin" ? (
+                  <DropdownMenuItem asChild><Link to="/host/register">Become a Host</Link></DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem asChild><Link to="/dashboard/bookings">My Bookings</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link to="/dashboard/profile">Profile</Link></DropdownMenuItem>
                 {user.role === "admin" && (
@@ -112,6 +133,24 @@ export function Navbar() {
                 {l.label}
               </Link>
             ))}
+            {(!user || (user.role !== "admin" && user.role !== "host")) && (
+              <Link
+                to="/host/register"
+                onClick={() => setOpen(false)}
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-primary hover:bg-muted"
+              >
+                Become a Host
+              </Link>
+            )}
+            {user && user.role === "host" && (
+              <Link
+                to="/host/dashboard"
+                onClick={() => setOpen(false)}
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-primary hover:bg-muted"
+              >
+                Host Dashboard
+              </Link>
+            )}
             {!user && (
               <Link to="/login" onClick={() => setOpen(false)} className="rounded-lg px-3 py-2 text-sm font-medium">
                 Sign in

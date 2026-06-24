@@ -5,6 +5,7 @@ export interface BookingListParams {
   status?: string;
   page?: number;
   limit?: number;
+  asHost?: boolean;
 }
 
 export interface BookingListResponse {

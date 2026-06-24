@@ -19,6 +19,8 @@ function toUserResponse(user: {
   avatar: string | null;
   role: string;
   kycStatus: string;
+  hostStatus?: string;
+  hostProfile?: any;
   isBlocked: boolean;
   createdAt: Date;
   _count?: { bookings: number };
@@ -29,9 +31,11 @@ function toUserResponse(user: {
     email:         user.email,
     phone:         user.phone  ?? undefined,
     avatar:        user.avatar ?? undefined,
-    role:          user.role === 'ADMIN' ? 'admin' : 'user',
+    role:          user.role === 'ADMIN' ? 'admin' : user.role === 'HOST' ? 'host' : 'user',
     kycStatus:     user.kycStatus.toLowerCase() as
       'not_started' | 'pending' | 'approved' | 'rejected',
+    hostStatus:    user.hostStatus,
+    hostProfile:   user.hostProfile ?? undefined,
     isBlocked:     user.isBlocked,
     createdAt:     user.createdAt.toISOString(),
     bookingCount:  user._count?.bookings ?? 0,
@@ -83,7 +87,8 @@ export async function listUsers(query: UserListQuery) {
       where,
       select: {
         id: true, name: true, email: true, phone: true, avatar: true,
-        role: true, kycStatus: true, isBlocked: true, createdAt: true,
+        role: true, kycStatus: true, hostStatus: true, isBlocked: true, createdAt: true,
+        hostProfile: true,
         _count: { select: { bookings: true } },
       },
       orderBy: { createdAt: 'desc' },

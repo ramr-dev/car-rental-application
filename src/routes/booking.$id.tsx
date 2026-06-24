@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -19,11 +19,20 @@ import {
 import { PublicLayout } from "@/layouts/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { vehicleService } from "@/lib/api/vehicle.service";
 import { offerService } from "@/lib/api/offer.service";
 import { useBookingDraft } from "@/store/booking";
@@ -77,7 +86,7 @@ function calcDurationLabel(startDT: string, endDT: string): string {
 
 function BookingPage() {
   const { id } = Route.useParams();
-  const { draft, setDraft } = useBookingDraft();
+  const { draft, setDraft, resetTrip } = useBookingDraft();
   const navigate = useNavigate();
   const { data: vehicle, isLoading } = useQuery({
     queryKey: ["vehicle", id],
@@ -96,9 +105,30 @@ function BookingPage() {
     staleTime: 5 * 60_000,
   });
 
-  const [step, setStep] = useState(0);
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  const step = draft.step ?? 0;
+  const setStep = (s: number | ((prev: number) => number)) => {
+    const nextStep = typeof s === "function" ? s(step) : s;
+    setDraft({ step: nextStep });
+  };
+
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [rangeConflictError, setRangeConflictError] = useState("");
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
+
+  // Reset/sync draft if path ID doesn't match persisted vehicleId
+  useEffect(() => {
+    if (vehicle && draft.vehicleId && draft.vehicleId !== String(vehicle.id)) {
+      resetTrip();
+      setDraft({ vehicleId: String(vehicle.id), step: 0 });
+    } else if (vehicle && !draft.vehicleId) {
+      setDraft({ vehicleId: String(vehicle.id) });
+    }
+  }, [vehicle, draft.vehicleId, id, resetTrip, setDraft]);
 
   // Draft stores full datetimes ("YYYY-MM-DDTHH:MM"). Decompose for form init.
   const draftStartDate = draft.startDate?.slice(0, 10) ?? "";
@@ -145,7 +175,7 @@ function BookingPage() {
 
   // ─── Loading state ─────────────────────────────────────────────────────
 
-  if (isLoading) {
+  if (isLoading || !hasMounted) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -175,7 +205,15 @@ function BookingPage() {
 
   const hourlyRate = Math.round((vehicle.pricePerDay / 12) * 100) / 100;
 
-  const pricing = calcBookingTotal(vehicle.pricePerDay, rentalHours, 0, SERVICE_FEE_RATE, TAX_RATE, SECURITY_DEPOSIT, activeOffers);
+  const pricing = calcBookingTotal(
+    vehicle.pricePerDay,
+    rentalHours,
+    draft.addons?.includes("damage_protection") ? 200 : 0,
+    SERVICE_FEE_RATE,
+    TAX_RATE,
+    SECURITY_DEPOSIT,
+    activeOffers
+  );
   const billedLabel = pricing.isHourly
     ? `${Math.round(rentalHours)} hrs billed`
     : `${pricing.days} day${pricing.days !== 1 ? "s" : ""} billed`;
@@ -562,6 +600,159 @@ function BookingPage() {
                   <SummaryRow icon={<FileText className="h-4 w-4" />} label="License" value={`${draft.licenseNumber || "—"} · ${draft.licenseCountry || "—"}`} />
                 </div>
 
+                {/* Travel with Confidence protection cover */}
+                <div className="mt-6 overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 p-5 transition-all hover:border-primary/30">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <ShieldCheck className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <h3 className="font-display font-semibold text-foreground">Travel with Confidence</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Secure your trip against accidental damage for just <strong className="text-primary">$200</strong>.
+                        </p>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex cursor-pointer items-center">
+                      <input
+                        type="checkbox"
+                        checked={draft.addons?.includes("damage_protection")}
+                        onChange={() => {
+                          const hasAddon = draft.addons?.includes("damage_protection");
+                          setDraft({
+                            ...draft,
+                            addons: hasAddon
+                              ? draft.addons.filter((a) => a !== "damage_protection")
+                              : [...(draft.addons || []), "damage_protection"],
+                          });
+                        }}
+                        className="peer sr-only"
+                      />
+                      <div className="peer relative h-6 w-11 rounded-full bg-muted transition-all after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none dark:border-gray-600" />
+                    </label>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 border-t border-border/60 pt-4 sm:grid-cols-2 text-xs">
+                    <div>
+                      <h4 className="font-semibold text-foreground flex items-center gap-1.5 mb-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        Coverage Benefits
+                      </h4>
+                      <ul className="space-y-1 text-muted-foreground list-disc pl-4">
+                        <li>Pay only a fraction of repair costs (as low as ₹2,999)</li>
+                        <li>Includes towing and roadside assistance</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-foreground flex items-center gap-1.5 mb-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        Exceptions & Policies
+                      </h4>
+                      <p className="text-muted-foreground">
+                        Exceptions apply (e.g. flooded areas, speed limit violations, intoxication, and required check-in/checkout photos).
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowPolicyModal(true)}
+                        className="mt-1.5 font-semibold text-primary hover:underline"
+                      >
+                        View all 9 policy exceptions & details
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <Dialog open={showPolicyModal} onOpenChange={setShowPolicyModal}>
+                  <DialogContent className="max-w-2xl overflow-y-auto max-h-[85vh] p-6 sm:p-8">
+                    <DialogHeader>
+                      <DialogTitle className="font-display text-2xl font-semibold flex items-center gap-2">
+                        <ShieldCheck className="h-6 w-6 text-primary" />
+                        Travel with Confidence — Protection Cover Terms
+                      </DialogTitle>
+                      <DialogDescription className="text-sm text-muted-foreground mt-1">
+                        Please review the full coverage benefits and policy exceptions carefully.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-6 mt-4">
+                      {/* Benefits Section */}
+                      <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-5">
+                        <h4 className="font-display font-semibold text-emerald-800 dark:text-emerald-400 flex items-center gap-2 text-sm">
+                          <Check className="h-5 w-5 text-emerald-500 shrink-0 animate-pulse" />
+                          Coverage Benefits
+                        </h4>
+                        <ul className="mt-3 space-y-2 text-sm text-muted-foreground list-disc pl-4">
+                          <li>
+                            <strong className="text-foreground">Accidental Damage Cover:</strong> If any accidental damages occur during your trip, damages under <strong className="text-foreground">₹3,000</strong> are fully covered.
+                          </li>
+                          <li>
+                            <strong className="text-foreground">Reduced Liability:</strong> Pay only a fraction of repair costs (as low as ₹2,999) for damages exceeding ₹3,000.
+                          </li>
+                          <li>
+                            <strong className="text-foreground">Roadside Support:</strong> Includes complete towing and emergency roadside assistance.
+                          </li>
+                        </ul>
+                      </div>
+
+                      {/* Exceptions Section */}
+                      <div className="space-y-4">
+                        <h4 className="font-display font-semibold text-destructive flex items-center gap-2 text-sm">
+                          <span className="h-2 w-2 rounded-full bg-destructive shrink-0 animate-ping" />
+                          Policy Exceptions & Exclusions
+                        </h4>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          Your protection cover will be rendered void, and you will be held fully liable for all repair and recovery costs, under the following circumstances:
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-lg bg-muted/45 border border-border p-3 text-xs">
+                            <span className="font-semibold text-foreground">1. Flooded Areas</span>
+                            <p className="text-muted-foreground mt-0.5">No coverage for engine or water damage caused by driving through flooded areas or waterbodies.</p>
+                          </div>
+                          <div className="rounded-lg bg-muted/45 border border-border p-3 text-xs">
+                            <span className="font-semibold text-foreground">2. Intoxication</span>
+                            <p className="text-muted-foreground mt-0.5">Policy is immediately void if the driver is found under the influence of alcohol, drugs, or illegal substances.</p>
+                          </div>
+                          <div className="rounded-lg bg-muted/45 border border-border p-3 text-xs">
+                            <span className="font-semibold text-foreground">3. Exceeding Speed Limits</span>
+                            <p className="text-muted-foreground mt-0.5">Not valid if GPS tracker data shows speed limit violations or extreme speeding during the trip.</p>
+                          </div>
+                          <div className="rounded-lg bg-muted/45 border border-border p-3 text-xs">
+                            <span className="font-semibold text-foreground">4. Racing & Off-Roading</span>
+                            <p className="text-muted-foreground mt-0.5">No coverage for off-roading, driving on unpaved trails, racing, track driving, or stunting.</p>
+                          </div>
+                          <div className="rounded-lg bg-muted/45 border border-border p-3 text-xs">
+                            <span className="font-semibold text-foreground">5. Danger Zones</span>
+                            <p className="text-muted-foreground mt-0.5">Not valid in government-declared danger zones, active disaster areas, or restricted military lands.</p>
+                          </div>
+                          <div className="rounded-lg bg-muted/45 border border-border p-3 text-xs">
+                            <span className="font-semibold text-foreground">6. Illegal Cargo</span>
+                            <p className="text-muted-foreground mt-0.5">Policy is void if the vehicle is used to carry or transport illegal substances, contraband, or weapons.</p>
+                          </div>
+                          <div className="rounded-lg bg-muted/45 border border-border p-3 text-xs">
+                            <span className="font-semibold text-foreground">7. Commercial Goods Transport</span>
+                            <p className="text-muted-foreground mt-0.5">No coverage if the vehicle is used for commercial shipping, courier transport, or loading heavy freight.</p>
+                          </div>
+                          <div className="rounded-lg bg-muted/45 border border-border p-3 text-xs">
+                            <span className="font-semibold text-foreground">8. Service Region Limits</span>
+                            <p className="text-muted-foreground mt-0.5">Not available in select remote regions where insurance/roadside partners cannot service claims due to local permit/excise rules or lack of network.</p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 p-4 text-xs mt-3 flex items-start gap-2.5">
+                          <span className="font-semibold text-amber-700 dark:text-amber-400 shrink-0 text-[14px]">⚠️</span>
+                          <div>
+                            <span className="font-semibold text-foreground">9. Check-in & Checkout Photos (CRITICAL)</span>
+                            <p className="text-muted-foreground mt-0.5">
+                              This policy is <strong className="text-foreground">void</strong> if you fail to upload high-quality vehicle images from all 4 sides during both check-in (trip start) and checkout (trip end). This is required to establish proof of damage occurrence.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
                 {/* Price breakdown */}
                 <div className="mt-6 space-y-3">
                   <h3 className="font-display text-lg font-semibold">Price Breakdown</h3>
@@ -582,6 +773,9 @@ function BookingPage() {
                           />
                         )}
                       </>
+                    )}
+                    {draft.addons?.includes("damage_protection") && (
+                      <PriceRow label="Accidental Damage Protection" amount={200} />
                     )}
                     <PriceRow label={`Service fee (${Math.round(SERVICE_FEE_RATE * 100)}%)`} amount={pricing.fees} />
                     <PriceRow label={`Tax (${Math.round(TAX_RATE * 100)}%)`} amount={pricing.tax} />
@@ -638,9 +832,16 @@ function BookingPage() {
               />
               <div className="p-5">
                 <h3 className="font-display text-lg font-semibold">{vehicle.name}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {vehicle.brand} · {vehicle.year} · {vehicle.type}
-                </p>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  <p className="text-sm text-muted-foreground">
+                    {vehicle.brand} · {vehicle.year} · {vehicle.type}
+                  </p>
+                  {vehicle.host && (
+                    <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold py-0 px-1.5 rounded">
+                      Hosted by {vehicle.host.name}
+                    </Badge>
+                  )}
+                </div>
 
                 <Separator className="my-4" />
 
