@@ -26,18 +26,24 @@ export function Footer() {
           </div>
 
           {[
-            { title: "Explore", links: [["Vehicles", "/vehicles"], ["Locations", "#"], ["Long-term", "#"], ["Business", "#"]] },
-            { title: "Company", links: [["About", "/about"], ["Careers", "#"], ["Press", "#"], ["Partners", "#"]] },
-            { title: "Support", links: [["Help Center", "#"], ["Contact", "#"], ["Insurance", "#"], ["Terms", "#"]] },
+            { title: "Explore", links: [["Vehicles", "/vehicles"], ["Locations", "/locations"], ["Long-term", "/contact"], ["Business", "/host/register"]] },
+            { title: "Company", links: [["About", "/about"], ["Press", "/about"], ["Partners", "/host/register"]] },
+            { title: "Support", links: [["Help Center", "/help"], ["Contact", "/contact"], ["Insurance", "/insurance"], ["Terms", "/terms"]] },
           ].map((col) => (
             <div key={col.title}>
               <h4 className="text-sm font-semibold">{col.title}</h4>
               <ul className="mt-4 space-y-3">
                 {col.links.map(([label, href]) => (
                   <li key={label}>
-                    <a href={href} className="text-sm text-muted-foreground transition-colors hover:text-foreground">
-                      {label}
-                    </a>
+                    {href.startsWith("/") ? (
+                      <Link to={href} className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                        {label}
+                      </Link>
+                    ) : (
+                      <a href={href} className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                        {label}
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -48,9 +54,9 @@ export function Footer() {
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border pt-8 text-sm text-muted-foreground md:flex-row">
           <p>© {new Date().getFullYear()} DriveLux. All rights reserved.</p>
           <div className="flex gap-6">
-            <a href="#" className="hover:text-foreground">Privacy</a>
-            <a href="#" className="hover:text-foreground">Cookies</a>
-            <a href="#" className="hover:text-foreground">Sitemap</a>
+            <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
+            <Link to="/privacy" className="hover:text-foreground">Cookies</Link>
+            <Link to="/vehicles" className="hover:text-foreground">Sitemap</Link>
           </div>
         </div>
       </div>

@@ -33,9 +33,36 @@ export function createApp() {
   app.use(helmet());
 
   // ── CORS ────────────────────────────────────────────────────────────────
+  const corsOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
   app.use(
     cors({
-      origin: env.CORS_ORIGIN,
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps, curl, postman)
+        if (!origin) return callback(null, true);
+        if (corsOrigins.indexOf(origin) !== -1 || corsOrigins.includes('*')) {
+          return callback(null, true);
+        }
+        if (env.NODE_ENV === 'development') {
+          try {
+            const url = new URL(origin);
+            if (
+              url.hostname === 'localhost' ||
+              url.hostname === '127.0.0.1' ||
+              url.hostname.startsWith('192.168.') ||
+              url.hostname.startsWith('10.') ||
+              url.hostname.startsWith('172.')
+            ) {
+              return callback(null, true);
+            }
+          } catch (e) {
+            // Ignore malformed URL errors
+          }
+        }
+        return callback(
+          new Error(`The CORS policy for this site does not allow access from origin: ${origin}`),
+          false
+        );
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
@@ -82,6 +109,31 @@ export function createApp() {
       env: env.NODE_ENV,
       timestamp: new Date().toISOString(),
     });
+  });
+
+  // ── Public configuration ───────────────────────────────────────────────────
+  app.get('/api/config', async (_req, res) => {
+    try {
+      const { prisma } = await import('./lib/prisma.js');
+      const rows = await prisma.appConfig.findMany();
+      const config: Record<string, string> = {};
+      rows.forEach((r) => {
+        config[r.key] = r.value;
+      });
+      res.json({
+        damage_protection_fee: Number(config['damage_protection_fee'] ?? 20),
+        security_deposit_percent: Number(config['security_deposit_percent'] ?? 20),
+        tax_rate: Number(config['tax_rate'] ?? 0.085),
+        service_fee_rate: Number(config['service_fee_rate'] ?? 0.12),
+        late_return_fee_per_hour: Number(config['late_return_fee_per_hour'] ?? 25),
+        cancellation_fee_percent: Number(config['cancellation_fee_percent'] ?? 10),
+        min_rental_days: Number(config['min_rental_days'] ?? 1),
+        max_rental_days: Number(config['max_rental_days'] ?? 90),
+        active_payment_gateway: config['active_payment_gateway'] ?? 'stripe',
+      });
+    } catch (e) {
+      res.status(500).json({ error: 'Failed to load configuration' });
+    }
   });
 
   // ── API routes ────────────────────────────────────────────────────────────

@@ -53,7 +53,7 @@ function HostRegisterPage() {
   const backInputRef = useRef<HTMLInputElement>(null);
 
   // Form setup
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, setValue, watch, setError, trigger, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
       panNumber: "",
       phone: user?.phone ?? "",
@@ -89,8 +89,20 @@ function HostRegisterPage() {
       setStep(4);
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.error ?? "Failed to submit profile. Please try again.";
-      toast.error(msg);
+      const data = err?.response?.data;
+      if (data?.error === "Validation failed" && Array.isArray(data.details)) {
+        data.details.forEach((detail: { field: string; message: string }) => {
+          setError(detail.field as any, {
+            type: "server",
+            message: detail.message,
+          });
+        });
+        const fieldErrors = data.details.map((d: any) => d.message).join(", ");
+        toast.error(`Validation failed: ${fieldErrors}`);
+      } else {
+        const msg = data?.error ?? "Failed to submit profile. Please try again.";
+        toast.error(msg);
+      }
     }
   });
 
@@ -329,7 +341,15 @@ function HostRegisterPage() {
                     </CardContent>
                     <CardFooter className="justify-end border-t pt-6 gap-4">
                       <Button asChild variant="ghost"><Link to="/">Cancel</Link></Button>
-                      <Button onClick={() => setStep(2)} className="shadow-soft">
+                      <Button 
+                        onClick={async () => {
+                          const isValid = await trigger(["phone", "panNumber"]);
+                          if (isValid) {
+                            setStep(2);
+                          }
+                        }} 
+                        className="shadow-soft"
+                      >
                         Verify Identity <ChevronRight className="h-4 w-4 ml-1" />
                       </Button>
                     </CardFooter>
@@ -473,9 +493,11 @@ function HostRegisterPage() {
                         Back
                       </Button>
                       <Button
-                        onClick={() => {
-                          if (!watchValues.panNumber) {
-                            toast.error("PAN number is required");
+                        onClick={async () => {
+                          const isStep1Valid = await trigger(["phone", "panNumber"]);
+                          if (!isStep1Valid) {
+                            setStep(1);
+                            toast.error("Please fix validation errors in Step 1.");
                             return;
                           }
                           if (!watchValues.aadhaarFrontUrl || !watchValues.aadhaarBackUrl) {

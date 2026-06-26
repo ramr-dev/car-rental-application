@@ -61,7 +61,7 @@ export async function uploadImage(req: Request, res: Response): Promise<void> {
   // Build the public URL using the server's base origin
   const baseUrl = env.CORS_ORIGIN.replace(/\/$/, '');
   // Static files are served from port 3001 (the backend), not the frontend origin
-  const backendBase = `http://localhost:${process.env.PORT ?? 3001}`;
+  const backendBase = `${req.protocol}://${req.get('host')}`;
   const url = `${backendBase}/uploads/vehicles/${file.filename}`;
   res.status(201).json({ url });
 }

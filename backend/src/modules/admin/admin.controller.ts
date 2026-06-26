@@ -122,3 +122,54 @@ export async function processPayout(req: Request, res: Response): Promise<void> 
   const result = await adminHostService.processPayout(hostId, referenceNum);
   res.status(201).json(result);
 }
+
+// GET /api/admin/config
+export async function getAllConfig(_req: Request, res: Response): Promise<void> {
+  const { prisma } = await import('../../lib/prisma.js');
+  const rows = await prisma.appConfig.findMany();
+  const config: Record<string, string> = {};
+  rows.forEach((r) => {
+    config[r.key] = r.value;
+  });
+  res.json({
+    damage_protection_fee: Number(config['damage_protection_fee'] ?? 20),
+    security_deposit_percent: Number(config['security_deposit_percent'] ?? 20),
+    tax_rate: Number(config['tax_rate'] ?? 0.085),
+    service_fee_rate: Number(config['service_fee_rate'] ?? 0.12),
+    late_return_fee_per_hour: Number(config['late_return_fee_per_hour'] ?? 25),
+    cancellation_fee_percent: Number(config['cancellation_fee_percent'] ?? 10),
+    min_rental_days: Number(config['min_rental_days'] ?? 1),
+    max_rental_days: Number(config['max_rental_days'] ?? 90),
+    active_payment_gateway: config['active_payment_gateway'] ?? 'stripe',
+  });
+}
+
+// PATCH /api/admin/config
+export async function updateConfig(req: Request, res: Response): Promise<void> {
+  const body = req.body as Record<string, any>;
+  const { prisma } = await import('../../lib/prisma.js');
+  const allowedKeys = [
+    'damage_protection_fee',
+    'security_deposit_percent',
+    'tax_rate',
+    'service_fee_rate',
+    'late_return_fee_per_hour',
+    'cancellation_fee_percent',
+    'min_rental_days',
+    'max_rental_days',
+    'active_payment_gateway',
+  ];
+
+  for (const [key, value] of Object.entries(body)) {
+    if (allowedKeys.includes(key)) {
+      await prisma.appConfig.upsert({
+        where: { key },
+        update: { value: String(value) },
+        create: { key, value: String(value) },
+      });
+    }
+  }
+
+  res.json({ success: true });
+}
+

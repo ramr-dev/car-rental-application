@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Car, Menu, Moon, Sun, X } from "lucide-react";
+import { Car, Menu, Moon, Sun, X, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/store/theme";
@@ -48,25 +48,33 @@ export function Navbar() {
               {l.label}
             </Link>
           ))}
-          {(!user || (user.role !== "admin" && user.role !== "host")) && (
-            <Link
-              to="/host/register"
-              className={`text-sm font-semibold text-primary hover:text-primary/80 transition-colors`}
-            >
-              Become a Host
-            </Link>
-          )}
-          {user && user.role === "host" && (
-            <Link
-              to="/host/dashboard"
-              className={`text-sm font-semibold text-primary hover:text-primary/80 transition-colors`}
-            >
-              Host Dashboard
-            </Link>
-          )}
         </nav>
 
         <div className="flex items-center gap-2">
+          {(!user || (user.role !== "admin" && user.role !== "host")) && (
+            <Button
+              asChild
+              variant="outline"
+              className="hidden md:inline-flex items-center gap-1.5 border-primary/20 text-primary bg-primary/5 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer rounded-xl font-semibold shadow-soft hover:shadow-glow"
+            >
+              <Link to="/host/register">
+                <Sparkles className="h-3.5 w-3.5 animate-pulse text-amber-500" />
+                Become a Host
+              </Link>
+            </Button>
+          )}
+          {user && user.role === "host" && (
+            <Button
+              asChild
+              variant="outline"
+              className="hidden md:inline-flex items-center gap-1.5 border-primary/20 text-primary bg-primary/5 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer rounded-xl font-semibold shadow-soft hover:shadow-glow"
+            >
+              <Link to="/host/dashboard">
+                Host Dashboard
+              </Link>
+            </Button>
+          )}
+
           <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme">
             {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
           </Button>

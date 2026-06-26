@@ -94,9 +94,14 @@ app = FastAPI(
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # Allows the React frontend (localhost:8080) to call this service
 
+# Parse comma-separated origins from environment settings
+cors_origins = [o.strip() for o in settings.CORS_ORIGIN.split(",") if o.strip()]
+cors_origins.extend(["http://localhost:3000", "http://localhost:5173"])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.CORS_ORIGIN, "http://localhost:3000", "http://localhost:5173"],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?",
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],

@@ -15,7 +15,23 @@ import { useAuth } from "@/store/auth";
 import axios from "axios";
 
 // Chatbot backend endpoint configuration
-const CHATBOT_API = import.meta.env.VITE_CHATBOT_API_URL || "http://localhost:8000";
+const getChatbotApiUrl = (): string => {
+  let urlStr = import.meta.env.VITE_CHATBOT_API_URL || "http://localhost:8000";
+  if (typeof window !== "undefined") {
+    try {
+      const uri = new URL(urlStr, window.location.origin);
+      if (uri.hostname === "localhost" && window.location.hostname !== "localhost") {
+        uri.hostname = window.location.hostname;
+        urlStr = uri.toString().replace(/\/$/, "");
+      }
+    } catch {
+      // Ignore URL parsing errors
+    }
+  }
+  return urlStr;
+};
+
+const CHATBOT_API = getChatbotApiUrl();
 
 interface Message {
   id: string;

@@ -89,6 +89,10 @@ adminRouter.get('/stats/bookings', (_req, res) => {
   res.status(501).json({ message: 'Not implemented — Phase 7' });
 });
 
+// ── General app configuration ──────────────────────────────────────────────
+adminRouter.get('/config', asyncHandler(controller.getAllConfig));
+adminRouter.patch('/config', asyncHandler(controller.updateConfig));
+
 // ── Payment gateway config ─────────────────────────────────────────────────
 
 // GET  /api/admin/config/gateway  → returns { gateway: 'stripe' | 'razorpay' }

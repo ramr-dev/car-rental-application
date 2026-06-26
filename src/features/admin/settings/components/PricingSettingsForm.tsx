@@ -1,11 +1,13 @@
 import { useForm } from "react-hook-form";
-import { CalendarRange, CreditCard, Percent, Save } from "lucide-react";
+import { CalendarRange, CreditCard, Percent, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SectionHeader, Separator } from "./SettingsHelpers";
+import { api } from "@/lib/api/client";
+import { useEffect, useState } from "react";
 
 type PricingForm = {
   depositPercent: number;
@@ -15,22 +17,76 @@ type PricingForm = {
   minRentalDays: number;
   maxRentalDays: number;
   taxPercent: number;
+  damageProtectionFee: number;
 };
 
 export function PricingSettingsForm() {
-  const { register, handleSubmit } = useForm<PricingForm>({
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const { register, handleSubmit, reset } = useForm<PricingForm>({
     defaultValues: {
       depositPercent: 20,
-      serviceFeePercent: 8,
+      serviceFeePercent: 12,
       lateReturnFeePerHour: 25,
       cancellationFeePercent: 10,
       minRentalDays: 1,
       maxRentalDays: 90,
       taxPercent: 8.5,
+      damageProtectionFee: 20,
     },
   });
 
-  const onSubmit = (_data: PricingForm) => toast.success("Pricing settings saved successfully.");
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const { data } = await api.get("/admin/config");
+        reset({
+          depositPercent: data.security_deposit_percent ?? 20,
+          serviceFeePercent: (data.service_fee_rate ?? 0.12) * 100,
+          lateReturnFeePerHour: data.late_return_fee_per_hour ?? 25,
+          cancellationFeePercent: data.cancellation_fee_percent ?? 10,
+          minRentalDays: data.min_rental_days ?? 1,
+          maxRentalDays: data.max_rental_days ?? 90,
+          taxPercent: (data.tax_rate ?? 0.085) * 100,
+          damageProtectionFee: data.damage_protection_fee ?? 20,
+        });
+      } catch (err) {
+        toast.error("Failed to load pricing settings from server.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchConfig();
+  }, [reset]);
+
+  const onSubmit = async (data: PricingForm) => {
+    setSaving(true);
+    try {
+      await api.patch("/admin/config", {
+        security_deposit_percent: data.depositPercent,
+        service_fee_rate: data.serviceFeePercent / 100,
+        late_return_fee_per_hour: data.lateReturnFeePerHour,
+        cancellation_fee_percent: data.cancellationFeePercent,
+        min_rental_days: data.minRentalDays,
+        max_rental_days: data.maxRentalDays,
+        tax_rate: data.taxPercent / 100,
+        damage_protection_fee: data.damageProtectionFee,
+      });
+      toast.success("Pricing settings saved successfully.");
+    } catch (err) {
+      toast.error("Failed to save settings. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-48 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -78,6 +134,14 @@ export function PricingSettingsForm() {
             </div>
             <p className="mt-1 text-xs text-muted-foreground">% of booking charged on cancellation.</p>
           </div>
+          <div>
+            <Label>Travel with Confidence Fee ($)</Label>
+            <div className="relative mt-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+              <Input type="number" step="1" min="0" {...register("damageProtectionFee", { valueAsNumber: true })} className="pl-6" />
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Accidental damage protection cover price.</p>
+          </div>
         </div>
       </Card>
 
@@ -97,8 +161,12 @@ export function PricingSettingsForm() {
       </Card>
 
       <div className="flex justify-end">
-        <Button type="submit" className="shadow-soft">
-          <Save className="mr-2 h-4 w-4" /> Save Pricing Settings
+        <Button type="submit" disabled={saving} className="shadow-soft">
+          {saving ? (
+            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+          ) : (
+            <><Save className="mr-2 h-4 w-4" /> Save Pricing Settings</>
+          )}
         </Button>
       </div>
     </form>

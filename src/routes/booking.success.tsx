@@ -1,13 +1,21 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Check, Car, MapPin, Calendar, CreditCard, AlertCircle, Loader2, Home,
+  Check, Car, MapPin, Calendar, CreditCard, AlertCircle, Loader2, Home, ShieldAlert,
 } from "lucide-react";
 import { PublicLayout } from "@/layouts/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { paymentService } from "@/lib/api/payment.service";
 import { useAuth } from "@/store/auth";
 import { useBookingDraft } from "@/store/booking";
@@ -39,6 +47,16 @@ function BookingSuccessPage() {
   const [error,   setError]     = useState<string | null>(null);
   const [loading, setLoading]   = useState(true);
   const verifiedRef = useRef(false);
+
+  const [showKycModal, setShowKycModal] = useState(false);
+  const hasShownKycModalRef = useRef(false);
+
+  useEffect(() => {
+    if (!loading && booking && user && user.kycStatus !== "approved" && !hasShownKycModalRef.current) {
+      hasShownKycModalRef.current = true;
+      setShowKycModal(true);
+    }
+  }, [loading, booking, user]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -277,6 +295,56 @@ function BookingSuccessPage() {
             </Link>
           </Button>
         </div>
+
+        {/* ── KYC Requirement Modal ────────────────────────────────────── */}
+        <Dialog open={showKycModal} onOpenChange={setShowKycModal}>
+          <DialogContent className="max-w-md border-border/80 bg-background/95 backdrop-blur-md shadow-glow sm:rounded-2xl">
+            <DialogHeader className="flex flex-col items-center text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10 text-amber-500 ring-8 ring-amber-500/5 mb-4 animate-pulse">
+                <ShieldAlert className="h-7 w-7" />
+              </div>
+              <DialogTitle className="font-display text-2xl font-bold tracking-tight text-foreground">
+                KYC Verification Required
+              </DialogTitle>
+              <DialogDescription className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                Please complete your KYC to approve the booking. Since we rent out premium luxury vehicles, our compliance team must verify your identity and driver eligibility before you can collect your vehicle.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-muted-foreground space-y-2">
+              <div className="flex items-center gap-2">
+                <Check className="h-3 w-3 text-amber-500" />
+                <span>Upload a valid Government ID / Driver's License.</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="h-3 w-3 text-amber-500" />
+                <span>Most reviews are completed in 2-4 hours.</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="h-3 w-3 text-amber-500" />
+                <span>Ensure details match your profile name exactly.</span>
+              </div>
+            </div>
+
+            <DialogFooter className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                variant="ghost"
+                onClick={() => setShowKycModal(false)}
+                className="w-full sm:w-auto text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                Skip for Now
+              </Button>
+              <Button
+                asChild
+                className="w-full sm:w-auto shadow-glow bg-amber-500 hover:bg-amber-600 text-black font-semibold cursor-pointer"
+              >
+                <Link to="/dashboard/kyc">
+                  Complete KYC Verification
+                </Link>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
       </div>
     </PublicLayout>

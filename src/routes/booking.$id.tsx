@@ -38,6 +38,7 @@ import { offerService } from "@/lib/api/offer.service";
 import { useBookingDraft } from "@/store/booking";
 import { BOOKING_STEPS, SECURITY_DEPOSIT, TAX_RATE, SERVICE_FEE_RATE } from "@/constants";
 import { calcBookingTotal } from "@/utils/formatters";
+import { api } from "@/lib/api/client";
 import { OffersBanner } from "@/components/offers/OffersBanner";
 import {
   step0Schema,
@@ -102,6 +103,20 @@ function BookingPage() {
   const { data: activeOffers = [] } = useQuery({
     queryKey: ["offers"],
     queryFn: offerService.listActive,
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: config = {
+    damage_protection_fee: 20,
+    security_deposit_percent: 20,
+    tax_rate: 0.085,
+    service_fee_rate: 0.12,
+  } } = useQuery({
+    queryKey: ["app-config"],
+    queryFn: async () => {
+      const { data } = await api.get("/config");
+      return data;
+    },
     staleTime: 5 * 60_000,
   });
 
@@ -205,13 +220,21 @@ function BookingPage() {
 
   const hourlyRate = Math.round((vehicle.pricePerDay / 12) * 100) / 100;
 
+  const damageProtectionFee = config.damage_protection_fee ?? 20;
+  const serviceFeeRate = config.service_fee_rate ?? 0.12;
+  const taxRate = config.tax_rate ?? 0.085;
+  const subtotalBeforeDiscount = Math.round(Math.max(1, Math.ceil(rentalHours / 24)) * vehicle.pricePerDay);
+  const depositAmount = config.security_deposit_percent 
+    ? Math.round(subtotalBeforeDiscount * (config.security_deposit_percent / 100))
+    : 500;
+
   const pricing = calcBookingTotal(
     vehicle.pricePerDay,
     rentalHours,
-    draft.addons?.includes("damage_protection") ? 200 : 0,
-    SERVICE_FEE_RATE,
-    TAX_RATE,
-    SECURITY_DEPOSIT,
+    draft.addons?.includes("damage_protection") ? damageProtectionFee : 0,
+    serviceFeeRate,
+    taxRate,
+    depositAmount,
     activeOffers
   );
   const billedLabel = pricing.isHourly
@@ -610,7 +633,7 @@ function BookingPage() {
                       <div>
                         <h3 className="font-display font-semibold text-foreground">Travel with Confidence</h3>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Secure your trip against accidental damage for just <strong className="text-primary">$200</strong>.
+                          Secure your trip against accidental damage for just <strong className="text-primary">${damageProtectionFee}</strong>.
                         </p>
                       </div>
                     </div>
@@ -775,17 +798,17 @@ function BookingPage() {
                       </>
                     )}
                     {draft.addons?.includes("damage_protection") && (
-                      <PriceRow label="Accidental Damage Protection" amount={200} />
+                      <PriceRow label="Accidental Damage Protection" amount={damageProtectionFee} />
                     )}
-                    <PriceRow label={`Service fee (${Math.round(SERVICE_FEE_RATE * 100)}%)`} amount={pricing.fees} />
-                    <PriceRow label={`Tax (${Math.round(TAX_RATE * 100)}%)`} amount={pricing.tax} />
+                    <PriceRow label={`Service fee (${Math.round(serviceFeeRate * 100)}%)`} amount={pricing.fees} />
+                    <PriceRow label={`Tax (${Math.round(taxRate * 100)}%)`} amount={pricing.tax} />
                     <Separator />
                     <PriceRow label="Subtotal" amount={pricing.total} />
-                    <PriceRow label={`Security deposit (refundable)`} amount={SECURITY_DEPOSIT} muted />
+                    <PriceRow label={`Security deposit (refundable)`} amount={pricing.deposit} />
                     <Separator />
                     <div className="flex justify-between font-display text-base font-bold">
                       <span>Total due at pickup</span>
-                      <span>${(pricing.total + SECURITY_DEPOSIT).toLocaleString()}</span>
+                      <span>${(pricing.total + pricing.deposit).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
@@ -801,7 +824,7 @@ function BookingPage() {
                     I confirm all the information provided is accurate. I agree to the{" "}
                     <span className="font-medium text-foreground">rental terms</span>,{" "}
                     <span className="font-medium text-foreground">cancellation policy</span>, and
-                    understand that a $500 refundable security deposit will be held at vehicle
+                    understand that a ${pricing.deposit.toLocaleString()} refundable security deposit will be held at vehicle
                     pickup.
                   </p>
                 </label>
@@ -836,11 +859,11 @@ function BookingPage() {
                   <p className="text-sm text-muted-foreground">
                     {vehicle.brand} · {vehicle.year} · {vehicle.type}
                   </p>
-                  {vehicle.host && (
+                  {/* {vehicle.host && (
                     <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold py-0 px-1.5 rounded">
                       Hosted by {vehicle.host.name}
                     </Badge>
-                  )}
+                  )} */}
                 </div>
 
                 <Separator className="my-4" />
@@ -885,7 +908,7 @@ function BookingPage() {
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>+ Security deposit</span>
-                    <span>${SECURITY_DEPOSIT} refundable</span>
+                    <span>${pricing.deposit.toLocaleString()} refundable</span>
                   </div>
                 </div>
 

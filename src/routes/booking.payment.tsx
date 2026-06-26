@@ -43,6 +43,7 @@ import { useAuth } from "@/store/auth";
 import { useTheme } from "@/store/theme";
 import { SECURITY_DEPOSIT, TAX_RATE, SERVICE_FEE_RATE } from "@/constants";
 import { calcBookingTotal } from "@/utils/formatters";
+import { api } from "@/lib/api/client";
 import type { StripeElementsOptions } from "@stripe/stripe-js";
 
 export const Route = createFileRoute("/booking/payment")({
@@ -613,6 +614,20 @@ function BookingPaymentPage() {
     retry: 1,
   });
 
+  const { data: config = {
+    damage_protection_fee: 20,
+    security_deposit_percent: 20,
+    tax_rate: 0.085,
+    service_fee_rate: 0.12,
+  } } = useQuery({
+    queryKey: ["app-config"],
+    queryFn: async () => {
+      const { data } = await api.get("/config");
+      return data;
+    },
+    staleTime: 5 * 60_000,
+  });
+
   const gateway = activeGateway ?? "stripe";
 
   // Stripe state
@@ -689,14 +704,22 @@ function BookingPaymentPage() {
       ? Math.max(6, (new Date(draft.endDate).getTime() - new Date(draft.startDate).getTime()) / 3_600_000)
       : 12;
 
+  const damageProtectionFee = config.damage_protection_fee ?? 20;
+  const serviceFeeRate = config.service_fee_rate ?? 0.12;
+  const taxRate = config.tax_rate ?? 0.085;
+  const subtotalBeforeDiscount = vehicle ? Math.round(Math.max(1, Math.ceil(rentalHours / 24)) * vehicle.pricePerDay) : 0;
+  const depositAmount = config.security_deposit_percent 
+    ? Math.round(subtotalBeforeDiscount * (config.security_deposit_percent / 100))
+    : 500;
+
   const pricing = vehicle
     ? calcBookingTotal(
         vehicle.pricePerDay,
         rentalHours,
-        draft.addons?.includes("damage_protection") ? 200 : 0,
-        SERVICE_FEE_RATE,
-        TAX_RATE,
-        SECURITY_DEPOSIT,
+        draft.addons?.includes("damage_protection") ? damageProtectionFee : 0,
+        serviceFeeRate,
+        taxRate,
+        depositAmount,
         activeOffers
       )
     : null;
@@ -896,15 +919,15 @@ function BookingPaymentPage() {
                           {draft.addons?.includes("damage_protection") && (
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Damage Protection</span>
-                              <span>$200</span>
+                              <span>${damageProtectionFee}</span>
                             </div>
                           )}
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Service fee (12%)</span>
+                            <span className="text-muted-foreground">Service fee ({Math.round(serviceFeeRate * 100)}%)</span>
                             <span>${pricing.fees}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Tax (8.5%)</span>
+                            <span className="text-muted-foreground">Tax ({Math.round(taxRate * 100)}%)</span>
                             <span>${pricing.tax}</span>
                           </div>
                           <Separator />
@@ -925,7 +948,7 @@ function BookingPaymentPage() {
                             </div>
                           )}
                           <p className="text-xs text-muted-foreground">
-                            + $500 refundable deposit at pickup
+                            + ${pricing.deposit.toLocaleString()} refundable deposit at pickup
                           </p>
                         </div>
                       </>

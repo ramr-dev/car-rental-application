@@ -1,6 +1,22 @@
 import axios from "axios";
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
+const getApiBaseUrl = (): string => {
+  let baseUrl = import.meta.env.VITE_API_URL ?? "/api";
+  if (typeof window !== "undefined") {
+    try {
+      const apiUri = new URL(baseUrl, window.location.origin);
+      if (apiUri.hostname === "localhost" && window.location.hostname !== "localhost") {
+        apiUri.hostname = window.location.hostname;
+        baseUrl = apiUri.toString().replace(/\/$/, "");
+      }
+    } catch {
+      // Fallback to original baseUrl on parse error
+    }
+  }
+  return baseUrl;
+};
+
+const BASE_URL = getApiBaseUrl();
 
 export const api = axios.create({
   baseURL: BASE_URL,

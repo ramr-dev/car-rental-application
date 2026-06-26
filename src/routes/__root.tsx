@@ -97,7 +97,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
             React hydrates, eliminating the server/client className mismatch. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem('drivelux-theme');if(s){var t=JSON.parse(s);if(t&&t.state&&t.state.theme==='dark')document.documentElement.classList.add('dark');}}catch(e){}})()`,
+            __html: `(function(){try{var s=localStorage.getItem('drivelux-theme');var isDark=true;if(s){var t=JSON.parse(s);if(t&&t.state&&t.state.theme)isDark=t.state.theme==='dark';}if(isDark)document.documentElement.classList.add('dark');else document.documentElement.classList.remove('dark');}catch(e){}})()`,
           }}
         />
         <HeadContent />
