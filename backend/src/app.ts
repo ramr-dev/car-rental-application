@@ -36,34 +36,11 @@ export function createApp() {
   app.use(helmet());
 
   // ── CORS ────────────────────────────────────────────────────────────────
-  const corsOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
+  // origin: true  →  always reflects the request's Origin header back as
+  // Access-Control-Allow-Origin.  Works with credentials and every domain.
   app.use(
     cors({
-      origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-        // Allow requests with no origin (like mobile apps, curl, postman)
-        if (!origin) return callback(null, true);
-        if (corsOrigins.indexOf(origin) !== -1 || corsOrigins.includes('*')) {
-          return callback(null, true);
-        }
-        if (env.NODE_ENV === 'development') {
-          try {
-            const url = new URL(origin);
-            if (
-              url.hostname === 'localhost' ||
-              url.hostname === '127.0.0.1' ||
-              url.hostname.startsWith('192.168.') ||
-              url.hostname.startsWith('10.') ||
-              url.hostname.startsWith('172.')
-            ) {
-              return callback(null, true);
-            }
-          } catch (e) {
-            // Ignore malformed URL errors
-          }
-        }
-        // Reject the origin cleanly without crashing the server
-        return callback(null, false);
-      },
+      origin: true,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
