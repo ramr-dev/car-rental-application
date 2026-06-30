@@ -36,7 +36,7 @@ export function createApp() {
   const corsOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
   app.use(
     cors({
-      origin: (origin, callback) => {
+      origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
         // Allow requests with no origin (like mobile apps, curl, postman)
         if (!origin) return callback(null, true);
         if (corsOrigins.indexOf(origin) !== -1 || corsOrigins.includes('*')) {
