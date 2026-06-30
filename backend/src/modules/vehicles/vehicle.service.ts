@@ -11,12 +11,19 @@ import type {
 // ─── Image URL rewriter ────────────────────────────────────────────────────
 // Vehicle images stored during local dev have http://localhost:3001 URLs.
 // In production these are unreachable from external devices (mobile, etc.).
-// This helper rewrites them to the real BACKEND_URL.
+// Render automatically provides RENDER_EXTERNAL_URL (e.g. https://drivelux-api.onrender.com).
 const LOCALHOST_RE = /^https?:\/\/localhost:\d+/;
+function getProductionBase(): string {
+  return (
+    process.env.RENDER_EXTERNAL_URL ??
+    env.BACKEND_URL ??
+    'http://localhost:3001'
+  ).replace(/\/$/, '');
+}
 function fixImageUrl(url: string | null): string | null {
   if (!url) return null;
   if (LOCALHOST_RE.test(url)) {
-    return url.replace(LOCALHOST_RE, env.BACKEND_URL.replace(/\/$/, ''));
+    return url.replace(LOCALHOST_RE, getProductionBase());
   }
   return url;
 }
