@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc --project tsconfig.json",
+    "build": "prisma generate && tsc --project tsconfig.json",
     "start": "node dist/server.js",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
