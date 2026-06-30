@@ -29,6 +29,9 @@ import { hostRouter } from './modules/hosts/host.routes.js';
 export function createApp() {
   const app = express();
 
+  // Trust proxy for rate limiting (Render, AWS, Cloudflare, etc.)
+  app.set('trust proxy', 1);
+
   // ── Security headers ────────────────────────────────────────────────────
   app.use(helmet());
 
