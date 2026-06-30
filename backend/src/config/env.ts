@@ -19,6 +19,7 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
 
   CORS_ORIGIN: z.string().default('*'),
+  BACKEND_URL: z.string().default('http://localhost:3001'),
   BCRYPT_ROUNDS: z.coerce.number().default(10),
 
   STRIPE_SECRET_KEY: z.string().min(1, 'STRIPE_SECRET_KEY is required'),

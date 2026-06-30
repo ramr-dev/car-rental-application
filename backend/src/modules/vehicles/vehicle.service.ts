@@ -1,11 +1,25 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/error.middleware.js';
+import { env } from '../../config/env.js';
 import type {
   VehicleListQuery,
   CreateVehicleInput,
   UpdateVehicleInput,
 } from './vehicle.schema.js';
+
+// ─── Image URL rewriter ────────────────────────────────────────────────────
+// Vehicle images stored during local dev have http://localhost:3001 URLs.
+// In production these are unreachable from external devices (mobile, etc.).
+// This helper rewrites them to the real BACKEND_URL.
+const LOCALHOST_RE = /^https?:\/\/localhost:\d+/;
+function fixImageUrl(url: string | null): string | null {
+  if (!url) return null;
+  if (LOCALHOST_RE.test(url)) {
+    return url.replace(LOCALHOST_RE, env.BACKEND_URL.replace(/\/$/, ''));
+  }
+  return url;
+}
 
 // ─── Response mapper ───────────────────────────────────────────────────────
 // Converts the Prisma Vehicle row into the shape the frontend expects:
@@ -51,8 +65,8 @@ function toVehicleResponse(v: PrismaVehicle) {
     rating:       v.rating,
     reviewCount:  v.reviewCount,
     location:     v.location,
-    image:        v.image,
-    images:       parseJsonArray(v.images),
+    image:        fixImageUrl(v.image),
+    images:       parseJsonArray(v.images).map((url: string) => fixImageUrl(url) ?? url),
     features:     parseJsonArray(v.features),
     available:    v.available,
     description:  v.description,
