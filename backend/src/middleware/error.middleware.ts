@@ -69,5 +69,10 @@ export function errorMiddleware(
 
   // Unexpected error — log and return a safe generic message
   console.error('[ERROR]', err);
-  res.status(500).json({ error: 'Internal server error', code: 'INTERNAL' });
+  res.status(500).json({
+    error: 'Internal server error',
+    message: err.message,
+    stack: err.stack,
+    code: 'INTERNAL'
+  });
 }
