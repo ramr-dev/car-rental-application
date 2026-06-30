@@ -58,10 +58,8 @@ export function createApp() {
             // Ignore malformed URL errors
           }
         }
-        return callback(
-          new Error(`The CORS policy for this site does not allow access from origin: ${origin}`),
-          false
-        );
+        // Reject the origin cleanly without crashing the server
+        return callback(null, false);
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
