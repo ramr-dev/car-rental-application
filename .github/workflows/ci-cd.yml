@@ -1,0 +1,102 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Job 1: Continuous Integration (Lint, Format, and Build Check)
+  build-and-verify:
+    name: CI - Build & Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # --- NODE.JS SETUP (Frontend & Backend) ---
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+
+      # --- BACKEND CI ---
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Generate Prisma Client
+        working-directory: ./backend
+        run: npx prisma generate
+
+      - name: Run Backend Lint
+        working-directory: ./backend
+        run: npm run lint --if-present
+
+      - name: Build Backend
+        working-directory: ./backend
+        run: npm run build
+
+      # --- FRONTEND CI ---
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Run Frontend Lint
+        run: npm run lint --if-present
+
+      - name: Build Frontend
+        run: npm run build
+        env:
+          # Dummy values are provided during CI build checks
+          VITE_API_URL: https://drivelux-api.onrender.com/api
+          VITE_STRIPE_PUBLISHABLE_KEY: pk_test_dummy
+          VITE_RAZORPAY_KEY_ID: rzp_test_dummy
+
+      # --- PYTHON CHATBOT CI ---
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: 'chatbot/requirements.txt'
+
+      - name: Install Chatbot Dependencies
+        working-directory: ./chatbot
+        run: pip install -r requirements.txt
+
+      - name: Verify Python Syntax
+        run: python -m compileall chatbot/
+
+  # Job 2: Continuous Deployment (Triggering Deploys on Main Push)
+  deploy:
+    name: CD - Deploy to Production
+    needs: build-and-verify
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      # --- DEPLOY BACKEND TO RENDER ---
+      - name: Trigger Render Deploy Hook (Backend)
+        run: |
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "⚠️ RENDER_DEPLOY_HOOK_URL secret not set. Skipping Backend deploy trigger."
+          else
+            echo "🚀 Triggering Render backend deployment..."
+            curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          fi
+
+      # --- DEPLOY CHATBOT TO RENDER ---
+      - name: Trigger Render Deploy Hook (Chatbot)
+        run: |
+          if [ -z "${{ secrets.RENDER_CHATBOT_DEPLOY_HOOK_URL }}" ]; then
+            echo "⚠️ RENDER_CHATBOT_DEPLOY_HOOK_URL secret not set. Skipping Chatbot deploy trigger."
+          else
+            echo "🚀 Triggering Render chatbot deployment..."
+            curl -f -X POST "${{ secrets.RENDER_CHATBOT_DEPLOY_HOOK_URL }}"
+          fi
